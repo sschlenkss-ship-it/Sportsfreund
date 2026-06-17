@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportsfreund - Single Asset Engine</title>
+    <style>
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle at center, #0f111a 0%, #030406 100%);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow-x: hidden; overflow-y: auto; color: white; user-select: none;
+            transition: background 0.8s ease;
+        }
+
+        body.night-mode {
+            background: radial-gradient(circle at center, #070911 0%, #010204 100%);
+        }
+
+        #sportsfreund-viewport {
+            display: flex; flex-direction: column; align-items: center;
+            margin-top: 60px; position: relative; height: 230px;
+        }
+
+        /* ☁️ DAS SMARTE EIN-BILD-SYSTEM */
+        #sportsfreund-stage {
+            width: 220px; height: 180px; position: relative;
+            cursor: grab; touch-action: none;
+            filter: drop-shadow(0 12px 24px rgba(0,0,0,0.5));
+        }
+
+        /* Schicht 1: Deine Master-Grafik ohne Gesicht. 
+           Die Farbe wird per CSS-Filter manipuliert, um Speicherplatz zu sparen! */
+        #cloud-background-asset {
+            width: 100%; height: 100%; object-fit: contain;
+            position: absolute; top: 0; left: 0; z-index: 1;
+            transition: filter 0.6s ease; /* Weicher Farbübergang */
+        }
+
+        /* Schicht 2: Das Gesicht wird präzise darübergelegt */
+        #face-animation-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 2; overflow: visible; pointer-events: none;
+        }
+
+        /* 💬 TRANSPARENTE COMIC-SPEECH-BUBBLE */
+        #speech-bubble {
+            position: absolute; top: -50px; 
+            background: rgba(255, 255, 255, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            color: #111524; padding: 10px 16px; border-radius: 20px; 
+            font-size: 13px; font-weight: 800;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-width: 220px; text-align: center;
+            border: 3.5px solid #1a2233; opacity: 0; 
+            transform: scale(0.7) translateY(15px);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none; z-index: 1001;
+        }
+        #speech-bubble::after {
+            content: ''; position: absolute; bottom: -11px; left: 50%; transform: translateX(-50%);
+            border-width: 8px 8px 0; border-style: solid; border-color: rgba(255, 255, 255, 0.88) transparent; z-index: 2;
+        }
+        #speech-bubble::before {
+            content: ''; position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%);
+            border-width: 10px 10px 0; border-style: solid; border-color: #1a2233 transparent; z-index: 1;
+        }
+        #speech-bubble.show { opacity: 1; transform: scale(1) translateY(0); }
+
+        /* 👁️ ANIMIERTES AUGEN-SYSTEM */
+        .eye-ball {
+            fill: radial-gradient(circle at 35% 35%, #55b5ff 0%, #0055dd 55%, #001a55 100%);
+            stroke: #ffffff; stroke-width: 2.5px; transform-origin: 75px 95px;
+            transition: opacity 0.2s;
+        }
+        #eye-r-ball { transform-origin: 145px 95px; }
+        
+        .sleeping-eyes {
+            fill: none; stroke: #1a2233; stroke-width: 4px; stroke-linecap: round;
+            opacity: 0; transition: opacity 0.2s;
+        }
+
+        @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.05); } }
+        .animated-eye { animation: blink 4s infinite ease-in-out; }
+        .is-sleeping .animated-eye { animation: none; }
+
+        .mouth-path { fill: none; stroke: #1a2233; stroke-width: 5.5px; stroke-linecap: round; transition: d 0.3s ease; }
+        
+        #score-display {
+            font-size: 26px; font-weight: bold; margin-top: 15px;
+            background: rgba(255,255,255,0.05); padding: 2px 14px; border-radius: 10px;
+        }
+
+        /* 🎛️ COCKPIT */
+        #fitness-lab {
+            max-width: 500px; margin: 20px auto; padding: 20px;
+            background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px;
+        }
+        .section-title { font-size: 14px; font-weight: bold; color: #74b9ff; margin: 15px 0 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 2px;}
+        .slider-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .control-group { background: rgba(0,0,0,0.25); padding: 10px; border-radius: 12px; }
+        .control-group.disabled { opacity: 0.3; pointer-events: none; } 
+        .control-group label { display: block; font-size: 11px; margin-bottom: 4px; opacity: 0.8; }
+        .control-group .val-view { font-weight: bold; color: #fff; float: right; font-size: 11px; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: rgba(255,255,255,0.1); height: 5px; border-radius: 3px; outline: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #74b9ff; cursor: pointer; }
+        .status-badge { background: #27ae60; color: white; padding: 2px 8px; border-radius: 20px; font-size: 10px; display: inline-block; float: right; }
+        .status-badge.sleep { background: #34495e; }
+    </style>
+</head>
+<body>
+
+    <div id="sportsfreund-viewport">
+        <div id="speech-bubble">Bitte kurz aufstehen! 🚶‍♂️</div>
+
+        <div id="sportsfreund-stage">
+            <img id="cloud-background-asset" src="Wolke 1.png" alt="Sportsfreund Core Base">
+            
+            <svg id="face-animation-layer" viewBox="0 0 220 180">
+                <g class="animated-eye" id="eye-group">
+                    <circle id="eye-l-ball" class="eye-ball" cx="75" cy="95" r="13" />
+                    <circle cx="71" cy="91" r="3.5" fill="white" class="eye-ball" />
+                    <circle cx="78" cy="98" r="1.5" fill="white" class="eye-ball" />
+                    
+                    <circle id="eye-r-ball" class="eye-ball" cx="145" cy="95" r="13" />
+                    <circle cx="141" cy="91" r="3.5" fill="white" class="eye-ball" />
+                    <circle cx="148" cy="98" r="1.5" fill="white" class="eye-ball" />
+
+                    <path id="sleep-l" class="sleeping-eyes" d="M 64,95 Q 75,105 86,95" />
+                    <path id="sleep-r" class="sleeping-eyes" d="M 134,95 Q 145,105 156,95" />
+                </g>
+                <path id="mouth" class="mouth-path" d="M 100,112 Q 110,126 120,112" />
+            </svg>
+        </div>
+        
+        <div id="score-display">0%</div>
+    </div>
+
+    <div id="fitness-lab">
+        <h3 style="margin: 0 0 15px 0; text-align: center; font-size: 16px;">⚙️ Sportsfreund Single-Asset Dashboard</h3>
+        
+        <div class="section-title">System-Zustand <span id="system-badge" class="status-badge">Aktiv</span></div>
+        <div class="control-group" style="margin-bottom: 12px;">
+            <label>Aktueller Nutzer-Modus</label>
+            <select id="param-state" onchange="updateEngine()" style="width: 100%; background: #2d3748; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; outline: none; cursor: pointer;">
+                <option value="awake">☀️ Wach (Echtzeit-Farbrechner aktiv)</option>
+                <option value="sleeping">🌙 Schläft (Inaktivitäts-Schutz aktiv)</option>
+            </select>
+        </div>
+
+        <div class="section-title" style="color: #ff7675;">🛑 Inaktivitäts-Sensor (WHO)</div>
+        <div class="control-group" id="sit-box" style="margin-bottom: 10px;">
+            <label>Sitzzeit ohne Unterbrechung <span class="val-view" id="v-sedentary">0 min</span></label>
+            <input type="range" id="param-sedentary" min="0" max="120" step="5" value="15" oninput="updateEngine()">
+        </div>
+
+        <div class="section-title">🏃‍♂️ Smartwatch Aktivitäts-Daten</div>
+        <div class="slider-grid">
+            <div class="control-group">
+                <label>Schritte heute <span class="val-view" id="v-steps">0</span></label>
+                <input type="range" id="param-steps" min="0" max="15000" step="100" value="9500" oninput="updateEngine()">
+            </div>
+            <div class="control-group">
+                <label>Aktueller Puls <span class="val-view" id="v-heart">0 bpm</span></label>
+                <input type="range" id="param-heart" min="50" max="180" step="1" value="72" oninput="updateEngine()">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DRAG & DROP LOGIK ---
+        const stage = document.getElementById('sportsfreund-stage');
+        let isDragging = false; let offsetX, offsetY;
+        const startDrag = (e) => {
+            isDragging = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            offsetX = clientX - stage.getBoundingClientRect().left;
+            offsetY = clientY - stage.getBoundingClientRect().top;
+        };
+        const doDrag = (e) => {
+            if (!isDragging) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            stage.style.position = 'absolute';
+            stage.style.left = `${clientX - offsetX}px`; stage.style.top = `${clientY - offsetY}px`;
+        };
+        document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', () => isDragging = false);
+        stage.addEventListener('mousedown', startDrag); stage.addEventListener('touchstart', startDrag);
+        stage.addEventListener('touchmove', doDrag); stage.addEventListener('touchend', () => isDragging = false);
+
+        // --- CORE LIVE FILTER ENGINE ---
+        const mouth = document.getElementById('mouth');
+        const scoreDisplay = document.getElementById('score-display');
+        const bubble = document.getElementById('speech-bubble');
+        const systemBadge = document.getElementById('system-badge');
+        const sitBox = document.getElementById('sit-box');
+        const cloudAsset = document.getElementById('cloud-background-asset');
+
+        function updateEngine() {
+            const userState = document.getElementById('param-state').value;
+            const steps = parseInt(document.getElementById('param-steps').value);
+            const heart = parseInt(document.getElementById('param-heart').value);
+            const sedentary = parseInt(document.getElementById('param-sedentary').value);
+
+            document.getElementById('v-steps').innerText = steps.toLocaleString();
+            document.getElementById('v-heart').innerText = heart + " bpm";
+            document.getElementById('v-sedentary').innerText = sedentary + " min";
+
+            let score = Math.min(100, (steps / 10000) * 100);
+            if (sedentary > 45) score -= (sedentary - 45) * 1.5;
+            const finalScore = Math.round(Math.max(0, score));
+
+            // --- 🌙 SCHLAFSCHUTZ: BILD WIRD AUTOMATISCH NACHTBLAU ---
+            if (userState === "sleeping") {
+                document.body.classList.add('night-mode');
+                stage.classList.add('is-sleeping');
+                systemBadge.innerText = "Schlaf-Schutz";
+                systemBadge.className = "status-badge sleep";
+                sitBox.classList.add('disabled');
+                bubble.classList.remove('show');
+
+                // Verschiebt den Farbwert deiner goldenen Wolke via CSS exakt in ein mattes, dunkles Nachtblau
+                cloudAsset.style.filter = "hue-rotate(190deg) saturate(0.4) brightness(0.5)";
+
+                document.querySelectorAll('.eye-ball').forEach(el => el.style.opacity = "0");
+                document.querySelectorAll('.sleeping-eyes').forEach(el => el.style.opacity = "1");
+                mouth.setAttribute('d', 'M 102,112 Q 110,115 118,112'); 
+                
+                scoreDisplay.innerText = "Zzz...";
+                return;
+            }
+
+            // --- ☀️ WACH-MODUS ---
+            document.body.classList.remove('night-mode');
+            stage.classList.remove('is-sleeping');
+            systemBadge.innerText = "Aktiv";
+            systemBadge.className = "status-badge";
+            sitBox.classList.remove('disabled');
+
+            document.querySelectorAll('.eye-ball').forEach(el => el.style.opacity = "1");
+            document.querySelectorAll('.sleeping-eyes').forEach(el => el.style.opacity = "0");
+
+            if (sedentary >= 60) {
+                bubble.innerHTML = "🚨 WHO-Tipp: Bitte kurz aufstehen und 5 Min laufen!";
+                bubble.classList.add('show');
+            } else if (sedentary >= 45) {
+                bubble.innerHTML = "🚶‍♂️ Zeit für Bewegung! Mach kurz 10 Kniebeugen.";
+                bubble.classList.add('show');
+            } else {
+                bubble.classList.remove('show');
+            }
+
+            scoreDisplay.innerText = finalScore + "%";
+
+            // --- LIVE MATRIX: ERRECHNET DIE FARBE DEINES ORIGINAL-BILDES ---
+            let mouthPath;
+            if (finalScore >= 75) {
+                // Originalfarbe (Gold/Gelb) belassen
+                cloudAsset.style.filter = "none";
+                mouthPath = "M 96,110 Q 110,130 124,110"; 
+            } else if (finalScore >= 35) {
+                // Verschiebt Gold zu Grün
+                cloudAsset.style.filter = "hue-rotate(70deg) saturate(1.1) brightness(0.9)";
+                mouthPath = "M 98,112 Q 110,122 122,112"; 
+            } else {
+                // Verschiebt Gold zu Lava-Rot
+                cloudAsset.style.filter = "hue-rotate(320deg) saturate(1.6) brightness(0.85)";
+                mouthPath = "M 98,118 Q 110,106 122,118"; 
+            }
+            
+            mouth.setAttribute('d', mouthPath);
+        }
+
+        updateEngine();
+    </script>
+</body>
+</html>
