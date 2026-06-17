@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportsfreund App</title>
+    <style>
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle at center, #0f111a 0%, #030406 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-family: sans-serif; color: white;
+        }
+
+        #sportsfreund-stage {
+            width: 220px; height: 180px; position: relative;
+        }
+
+        /* Das ist dein Bild. Wenn das Bild geladen wird, siehst du es. 
+           Falls nicht, siehst du den gelben Rahmen mit roter Fläche zur Fehlersuche. */
+        #cloud-background-asset {
+            width: 100%; height: 100%; object-fit: contain;
+            background-color: red; border: 5px solid yellow;
+        }
+
+        #face-animation-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        .eye-ball { fill: #55b5ff; stroke: white; stroke-width: 2px; }
+    </style>
+</head>
+<body>
+
+    <div id="sportsfreund-stage">
+        <img id="cloud-background-asset" src="wolke1.png" alt="Sportsfreund">
+        
+        <svg id="face-animation-layer" viewBox="0 0 220 180">
+            <circle class="eye-ball" cx="75" cy="90" r="10" />
+            <circle class="eye-ball" cx="145" cy="90" r="10" />
+        </svg>
+    </div>
+
+    <p style="margin-top: 20px;">Wird das Bild geladen?</p>
+
+</body>
+</html>
