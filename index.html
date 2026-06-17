@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; background: #030406; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        
+        #sportsfreund-stage { 
+            position: relative; 
+            width: 300px;
+            /* 1. Die harte Vektorkontur (0 blur) + 2. Der diffuse Schein (20px blur) */
+            filter: drop-shadow(0 0 1px gold) drop-shadow(0 0 1px gold) drop-shadow(0 0 15px gold); 
+        }
+        
+        #cloud-asset { width: 100%; display: block; }
+
+        .face-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        /* Augen näher beieinander (von 60/140 auf 80/120) */
+        .eye-group { filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); }
+        .eye-ball { fill: white; }
+        .iris { fill: #55b5ff; }
+        .pupil { fill: black; }
+        .shine { fill: white; opacity: 0.6; }
+        
+        .mouth-path { stroke: #1a2233; stroke-width: 4; fill: none; stroke-linecap: round; }
+    </style>
+</head>
+<body>
+    <div id="sportsfreund-stage">
+        <img id="cloud-asset" src="wolke1.png" alt="Sportsfreund">
+        
+        <svg class="face-layer" viewBox="0 0 200 100">
+            <g class="eye-group">
+                <circle cx="80" cy="45" r="16" class="eye-ball"/>
+                <circle cx="80" cy="45" r="9" class="iris"/>
+                <circle cx="82" cy="43" r="3" class="pupil"/>
+                <circle cx="83" cy="41" r="1.5" class="shine"/>
+            </g>
+            <g class="eye-group">
+                <circle cx="120" cy="45" r="16" class="eye-ball"/>
+                <circle cx="120" cy="45" r="9" class="iris"/>
+                <circle cx="122" cy="43" r="3" class="pupil"/>
+                <circle cx="123" cy="41" r="1.5" class="shine"/>
+            </g>
+            
+            <path class="mouth-path" d="M 85,70 Q 100,80 115,70"/>
+        </svg>
+    </div>
+</body>
+</html>
