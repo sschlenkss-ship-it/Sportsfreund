@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sportsfreund Professional</title>
+    <style>
+        body { margin: 0; background: #030406; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        
+        #sportsfreund-stage { width: 300px; height: 250px; position: relative; }
+        
+        /* Die Wolke bekommt nun ein Pastell-Overlay durch 'mix-blend-mode' */
+        #cloud-asset { 
+            width: 100%; height: 100%; object-fit: contain;
+            transition: all 0.8s ease;
+        }
+        
+        /* Der "Pastell-Körper"-Container */
+        .cloud-wrapper {
+            position: relative;
+            filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8));
+        }
+
+        /* Die Augen-Ebene */
+        .face { position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; }
+        .eye { position: absolute; top: 35%; width: 45px; height: 45px; background: #fff; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.3); }
+        .iris { position: absolute; top: 8px; left: 8px; width: 29px; height: 29px; background: radial-gradient(circle at 30% 30%, #55b5ff, #0055dd); border-radius: 50%; }
+    </style>
+</head>
+<body>
+    <div id="sportsfreund-stage">
+        <div id="cloud-container" class="cloud-wrapper">
+            <img id="cloud-asset" src="wolke1.png" alt="Wolke">
+        </div>
+        <div class="face">
+            <div class="eye" style="left: 20%;"><div class="iris"></div></div>
+            <div class="eye" style="right: 20%;"><div class="iris"></div></div>
+        </div>
+    </div>
+
+    <script>
+        function updateStyle(mode) {
+            const cloud = document.getElementById('cloud-asset');
+            const container = document.getElementById('cloud-container');
+            
+            if (mode === 'lava') {
+                cloud.style.backgroundColor = 'rgba(231, 76, 60, 0.3)'; // Pastell-Rot
+                container.style.filter = 'drop-shadow(0 0 20px rgba(231, 76, 60, 0.9))';
+            } else if (mode === 'green') {
+                cloud.style.backgroundColor = 'rgba(46, 204, 113, 0.3)'; // Pastell-Grün
+                container.style.filter = 'drop-shadow(0 0 20px rgba(46, 204, 113, 0.9))';
+            } else {
+                cloud.style.backgroundColor = 'rgba(255, 215, 0, 0.3)'; // Pastell-Gold
+                container.style.filter = 'drop-shadow(0 0 20px rgba(255, 215, 0, 0.9))';
+            }
+        }
+        updateStyle('green'); // Testweise Grün
+    </script>
+</body>
+</html>
