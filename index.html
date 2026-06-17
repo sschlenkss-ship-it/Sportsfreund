@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sportsfreund</title>
+    <style>
+        body { margin: 0; background: #030406; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        
+        #sportsfreund-stage { width: 300px; height: 250px; position: relative; }
+        
+        /* Die Kontur & Transparenz: Wir nutzen drop-shadow, damit NUR die Wolke leuchtet */
+        #cloud-asset { 
+            width: 100%; height: 100%; object-fit: contain;
+            filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.8));
+            transition: all 0.5s ease;
+        }
+
+        /* Gesichtsebene */
+        .face { position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; }
+        
+        /* Auge: Weiß + Blaue Iris + Schwarze Pupille */
+        .eye { position: absolute; top: 35%; width: 40px; height: 40px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .iris { width: 20px; height: 20px; background: #55b5ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .pupil { width: 8px; height: 8px; background: black; border-radius: 50%; }
+
+        /* Mund */
+        .mouth { position: absolute; top: 60%; left: 35%; width: 30%; height: 10px; border-bottom: 5px solid #1a2233; border-radius: 50%; }
+    </style>
+</head>
+<body>
+    <div id="sportsfreund-stage">
+        <img id="cloud-asset" src="wolke1.png" alt="Wolke">
+        <div class="face">
+            <div class="eye" style="left: 25%;"><div class="iris"><div class="pupil"></div></div></div>
+            <div class="eye" style="right: 25%;"><div class="iris"><div class="pupil"></div></div></div>
+            <div class="mouth"></div>
+        </div>
+    </div>
+
+    <script>
+        function setStyle(color, glow) {
+            const cloud = document.getElementById('cloud-asset');
+            cloud.style.filter = `drop-shadow(0 0 20px ${glow})`;
+            // Wir färben das Bild nicht mehr per Background, sondern per Filter-Tint
+            cloud.style.filter += ` sepia(1) saturate(2) hue-rotate(${color}deg)`;
+        }
+        // Beispiel für Gold:
+        setStyle(40, 'gold');
+    </script>
+</body>
+</html>
