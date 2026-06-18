@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sportsfreund Animation</title>
+    <style>
+        body { background: #030406; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        #stage { position: relative; width: 400px; }
+        
+        /* Das Bild der Wolke */
+        #original-wolke { width: 100%; display: block; transition: filter 0.3s; }
+        
+        /* Die Overlay-Ebene für Lider und Mund */
+        #overlay-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        .lid { fill: #d1e8ef; transition: transform 0.2s; } 
+        .mouth-overlay { stroke: #001f5f; stroke-width: 15; fill: none; stroke-linecap: round; transition: d 0.3s; }
+    </style>
+</head>
+<body>
+
+    <div id="stage">
+        <img id="original-wolke" src="WOLKEsvg_122854.svg">
+        
+        <svg id="overlay-layer" viewBox="0 0 540 380">
+            <ellipse id="lidL" class="lid" cx="200" cy="180" rx="45" ry="0" />
+            <ellipse id="lidR" class="lid" cx="340" cy="180" rx="45" ry="0" />
+            <path id="mouth-overlay" class="mouth-overlay" d="M 230,280 Q 270,320 310,280" />
+        </svg>
+    </div>
+
+    <script>
+        // Diese Funktion kannst du später von deiner App aus aufrufen: updateMood(schritte)
+        function updateMood(steps) {
+            const wolke = document.getElementById('original-wolke');
+            const mouth = document.getElementById('mouth-overlay');
+            const lids = [document.getElementById('lidL'), document.getElementById('lidR')];
+            
+            if (steps < 2000) {
+                // Schlechte Stimmung: Lavarot-Filter, Lider zu, trauriger Mund
+                wolke.style.filter = "hue-rotate(270deg)"; 
+                lids.forEach(l => l.setAttribute('ry', '45')); 
+                mouth.setAttribute('d', 'M 230,310 Q 270,280 310,310'); 
+            } else {
+                // Gute Stimmung: Originalfarben, Lider offen, grinsender Mund
+                wolke.style.filter = "hue-rotate(0deg)";
+                lids.forEach(l => l.setAttribute('ry', '0')); 
+                mouth.setAttribute('d', 'M 230,280 Q 270,320 310,280'); 
+            }
+        }
+    </script>
+</body>
+</html>
