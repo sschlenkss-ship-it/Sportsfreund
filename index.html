@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; background: #030406; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        #sportsfreund-wrapper { position: relative; width: 320px; filter: drop-shadow(0 0 10px var(--glow-color)); transition: filter 0.5s; }
+        .face-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* Augen-Stil nach Vorlage */
+        .eye-shadow { fill: #c0d8e8; } 
+        .iris { fill: #33a1de; }
+        .pupil { fill: #000; }
+        .glare { fill: #fff; opacity: 0.8; }
+        
+        /* Mund-Stil nach Vorlage */
+        .mouth-bg { fill: #2b0c0c; transition: d 0.4s ease; }
+        .mouth-tongue { fill: #e86d84; transition: d 0.4s ease; }
+    </style>
+</head>
+<body>
+
+<div id="sportsfreund-wrapper" style="--glow-color: #ff4500;">
+    <img src="wolke1.png" style="width:100%;">
+    <svg class="face-svg" viewBox="0 0 200 100">
+        <g id="eyeL" transform="translate(65,45)">
+            <circle r="26" class="eye-shadow"/>
+            <circle r="22" fill="white"/>
+            <circle r="12" class="iris"/>
+            <circle r="5" class="pupil"/>
+            <ellipse cx="-5" cy="-8" rx="4" ry="6" class="glare"/>
+        </g>
+        <g id="eyeR" transform="translate(135,45)">
+            <circle r="26" class="eye-shadow"/>
+            <circle r="22" fill="white"/>
+            <circle r="12" class="iris"/>
+            <circle r="5" class="pupil"/>
+            <ellipse cx="-5" cy="-8" rx="4" ry="6" class="glare"/>
+        </g>
+        <path id="mouth-bg" class="mouth-bg" d="M 75,70 Q 100,85 125,70 Z"/>
+        <path id="mouth-tongue" class="mouth-tongue" d="M 80,72 Q 100,80 120,72 Q 100,82 80,72"/>
+    </svg>
+</div>
+
+<script>
+function setMood(steps) {
+    const mouthBg = document.getElementById('mouth-bg');
+    const mouthTongue = document.getElementById('mouth-tongue');
+    const wrapper = document.getElementById('sportsfreund-wrapper');
+    
+    if (steps < 2000) { // Traurig
+        mouthBg.setAttribute('d', 'M 75,85 Q 100,75 125,85 Z');
+        mouthTongue.setAttribute('d', '');
+        wrapper.style.setProperty('--glow-color', '#ff4500');
+    } else if (steps < 8000) { // Neutral/Lächeln
+        mouthBg.setAttribute('d', 'M 75,75 Q 100,85 125,75 Z');
+        mouthTongue.setAttribute('d', 'M 80,77 Q 100,82 120,77 Q 100,80 80,77');
+        wrapper.style.setProperty('--glow-color', '#3b82f6');
+    } else { // Riesen-Grinsen wie Vorlage
+        mouthBg.setAttribute('d', 'M 70,70 Q 100,105 130,70 Z');
+        mouthTongue.setAttribute('d', 'M 75,75 Q 100,100 125,75 Q 100,90 75,75');
+        wrapper.style.setProperty('--glow-color', '#ffd700');
+    }
+}
+</script>
+</body>
+</html>
