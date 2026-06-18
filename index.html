@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        body { background: #030406; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        
+        #wolke-stage {
+            position: relative;
+            width: 400px;
+        }
+
+        /* Die Basis-Wolke mit dem Leuchteffekt (der Kontur) */
+        .wolke-basis {
+            width: 100%;
+            /* Der drop-shadow legt die Kontur exakt um die Form der Grafik */
+            filter: drop-shadow(0px 0px 8px #FF0000); 
+            transition: filter 0.5s ease;
+        }
+
+        /* Augen-Animation */
+        @keyframes blinzeln { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0); } }
+        .augen { position: absolute; top: 0; left: 0; width: 100%; animation: blinzeln 5s infinite; }
+        
+        /* Mund */
+        .mund { position: absolute; top: 0; left: 0; width: 100%; transition: opacity 0.3s; }
+    </style>
+</head>
+<body>
+
+    <div id="wolke-stage">
+        <img src="Wolke5_blanko_023516.png" class="wolke-basis" id="basis">
+        <img src="Wolke2_nurAugen_023509.png" class="augen">
+        <img src="Wolke3_alles_023515.png" class="mund" id="mund">
+    </div>
+
+    <script>
+        function updateSportsfreund(s) {
+            const basis = document.getElementById('basis');
+            
+            // Die Farbe der Kontur (drop-shadow) ändert sich je nach Stimmung
+            if (s < 2000) basis.style.filter = "drop-shadow(0px 0px 10px #8B0000)"; // Dunkelrot
+            else if (s < 8000) basis.style.filter = "drop-shadow(0px 0px 10px #22c55e)"; // Grün
+            else basis.style.filter = "drop-shadow(0px 0px 15px #FFD700)"; // Gold (leuchtend)
+        }
+    </script>
+</body>
+</html>
