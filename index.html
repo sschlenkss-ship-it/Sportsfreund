@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; background: #030406; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        
+        #sportsfreund-wrapper { 
+            position: relative; width: 300px;
+            /* Die Kontur liegt jetzt sauber auf der Wolke, nicht auf dem Gesicht */
+            filter: drop-shadow(0px 0px 4px var(--outline-color)) 
+                    drop-shadow(0px 0px 4px var(--outline-color));
+            transition: filter 0.5s;
+        }
+
+        #cloud-asset { width: 100%; display: block; }
+        
+        .face-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* Augen: Gläserner Look mit radialen Verläufen */
+        .eye-group { transform-origin: center; }
+        .eye-ball { fill: #ffffff; }
+        .iris { fill: radial-gradient(circle, #ffffff 15%, var(--iris-color) 70%); }
+        .pupil { fill: #000000; }
+        
+        /* Lider: Nur als feine, subtile Bogen-Linie oben */
+        .lid { stroke: #000000; stroke-width: 2; fill: none; transition: opacity 0.3s; }
+        
+        /* Mund & Zähne */
+        .mouth-path { stroke: #1a2233; stroke-width: 6; fill: none; stroke-linecap: round; transition: all 0.5s; }
+        .teeth { fill: #ffffff; opacity: 0; transition: opacity 0.5s; }
+    </style>
+</head>
+<body>
+
+    <div style="margin-bottom:20px;">
+        <input type="number" id="stepInput" value="0" oninput="updateState()" placeholder="Schritte eingeben">
+    </div>
+
+    <div id="sportsfreund-wrapper" style="--outline-color: #ff4500;">
+        <img id="cloud-asset" src="wolke1.png" alt="Sportsfreund">
+        
+        <svg class="face-layer" viewBox="0 0 200 100">
+            <g class="eye-group" transform="translate(65, 45)">
+                <circle r="24" class="eye-ball"/>
+                <circle r="14" id="irisL" class="iris" style="--iris-color: #55b5ff;"/>
+                <circle cx="3" cy="-3" r="6" class="pupil"/>
+                <path id="lidL" d="M -20,-10 Q 0,-20 20,-10" class="lid" opacity="0"/>
+            </g>
+            <g class="eye-group" transform="translate(135, 45)">
+                <circle r="24" class="eye-ball"/>
+                <circle r="14" id="irisR" class="iris" style="--iris-color: #55b5ff;"/>
+                <circle cx="3" cy="-3" r="6" class="pupil"/>
+                <path id="lidR" d="M -20,-10 Q 0,-20 20,-10" class="lid" opacity="0"/>
+            </g>
+            
+            <path id="mouth" class="mouth-path" d="M 70,85 Q 100,70 130,85"/>
+            <rect id="teeth" x="85" y="78" width="30" height="8" rx="2" class="teeth"/>
+        </svg>
+    </div>
+
+    <script>
+        function updateState() {
+            const steps = parseInt(document.getElementById('stepInput').value);
+            const wrapper = document.getElementById('sportsfreund-wrapper');
+            const mouth = document.getElementById('mouth');
+            const lids = document.querySelectorAll('.lid');
+            const teeth = document.getElementById('teeth');
+            
+            let cfg;
+            if (steps < 2000) cfg = { color: '#ff4500', m: 'M 70,85 Q 100,70 130,85', lid: 1, th: 0 };
+            else if (steps < 5000) cfg = { color: '#3b82f6', m: 'M 70,80 Q 100,85 130,80', lid: 0.5, th: 0 };
+            else if (steps < 8000) cfg = { color: '#32cd32', m: 'M 70,80 Q 100,95 130,80', lid: 0, th: 0 };
+            else if (steps < 10000) cfg = { color: '#ffa500', m: 'M 70,75 Q 100,105 130,75', lid: 0, th: 1 };
+            else cfg = { color: '#ffd700', m: 'M 60,70 Q 100,115 140,70', lid: 0, th: 1 };
+
+            wrapper.style.setProperty('--outline-color', cfg.color);
+            mouth.setAttribute('d', cfg.m);
+            teeth.style.opacity = cfg.th;
+            lids.forEach(l => l.style.opacity = cfg.lid);
+        }
+    </script>
+</body>
+</html>
