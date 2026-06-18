@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; background: #030406; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: 'Segoe UI', sans-serif; }
+        
+        #cloud-master { width: 350px; height: 350px; }
+        
+        /* Die "Herz-Gewinner" Animationen */
+        .eye-group { transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .mouth { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Gold-Glow bei 10.000 Schritten */
+        .gold-glow { filter: drop-shadow(0 0 15px gold); }
+    </style>
+</head>
+<body>
+
+<svg id="cloud-master" viewBox="0 0 300 300">
+    <defs>
+        <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" style="stop-color:#fff"/>
+            <stop offset="100%" style="stop-color:#3b82f6" id="irisColor"/>
+        </radialGradient>
+    </defs>
+
+    <path id="cloud-outline" d="M 80,150 Q 80,100 150,100 Q 220,100 220,150 Q 220,200 150,200 Q 80,200 80,150" 
+          fill="#e2e8f0" stroke="#ff4500" stroke-width="12" />
+
+    <g id="face">
+        <g class="eye-group" id="eyeL" transform="translate(120, 140)">
+            <circle r="25" fill="white" />
+            <circle r="14" fill="url(#irisGrad)" />
+            <circle r="6" fill="black" />
+            <ellipse cx="-5" cy="-8" rx="3" ry="5" fill="white" opacity="0.8"/>
+        </g>
+        <g class="eye-group" id="eyeR" transform="translate(180, 140)">
+            <circle r="25" fill="white" />
+            <circle r="14" fill="url(#irisGrad)" />
+            <circle r="6" fill="black" />
+            <ellipse cx="-5" cy="-8" rx="3" ry="5" fill="white" opacity="0.8"/>
+        </g>
+        
+        <path id="mouth" d="M 130,170 Q 150,185 170,170" stroke="#1e293b" stroke-width="8" fill="none" stroke-linecap="round"/>
+    </g>
+</svg>
+
+<script>
+    function updateSportsfreund(steps) {
+        const outline = document.getElementById('cloud-outline');
+        const mouth = document.getElementById('mouth');
+        const iris = document.getElementById('irisColor');
+        
+        // Logik: Rot (schlecht) -> Gold (perfekt)
+        let color = steps < 2000 ? '#ef4444' : (steps < 7000 ? '#22c55e' : '#eab308');
+        outline.setAttribute('stroke', color);
+        iris.setAttribute('stop-color', color);
+        
+        // Mimik nach Kindchenschema
+        if (steps < 2000) {
+            mouth.setAttribute('d', 'M 130,180 Q 150,165 170,180'); // Traurig
+        } else if (steps < 10000) {
+            mouth.setAttribute('d', 'M 130,170 Q 150,185 170,170'); // Lächeln
+        } else {
+            mouth.setAttribute('d', 'M 120,160 Q 150,200 180,160'); // Riesengrinsen
+            outline.classList.add('gold-glow');
+        }
+    }
+    // Test: updateSportsfreund(10000);
+</script>
+</body>
+</html>
