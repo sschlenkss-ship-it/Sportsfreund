@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        body { background: #030406; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        #smiley-container { width: 400px; }
+        
+        /* Animation: Blinzeln der Original-Augen-Ebene */
+        @keyframes blinzeln { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0); } }
+        #augen-gruppe { transform-origin: center; animation: blinzeln 5s infinite; }
+        
+        /* Übergänge für Mund-Verformung */
+        #mund-pfad { transition: d 0.3s ease; }
+    </style>
+</head>
+<body>
+
+    <div id="smiley-container">
+        <svg viewBox="0 0 500 500" id="smiley-svg">
+            <g id="smiley-body">
+                <circle cx="250" cy="250" r="240" fill="#FFD700" stroke="#B8860B" stroke-width="8" />
+            </g>
+
+            <g id="augen-gruppe">
+                <circle cx="170" cy="200" r="40" fill="white" /><circle cx="170" cy="200" r="15" fill="black" />
+                <circle cx="330" cy="200" r="40" fill="white" /><circle cx="330" cy="200" r="15" fill="black" />
+            </g>
+
+            <path id="mund-pfad" d="M 150,350 Q 250,350 350,350" stroke="#800000" stroke-width="15" fill="none" stroke-linecap="round" />
+        </svg>
+    </div>
+
+    <input type="range" min="0" max="10000" id="stimmungs-regler" oninput="steuereSmiley(this.value)">
+
+    <script>
+        function steuereSmiley(wert) {
+            const body = document.getElementById('smiley-body');
+            const mund = document.getElementById('mund-pfad');
+
+            // Farbe anpassen (keine Filter!)
+            if (wert < 2000) body.setAttribute('fill', '#8B0000');
+            else if (wert < 8000) body.setAttribute('fill', '#22c55e');
+            else body.setAttribute('fill', '#FFD700');
+
+            // Mund-Kurve (Q-Path) anpassen: Mittelpunkt fest, Enden bewegen sich
+            let curve = 350 + ((wert - 5000) / 50);
+            mund.setAttribute('d', `M 150,350 Q 250,${curve} 350,350`);
+        }
+    </script>
+</body>
+</html>
