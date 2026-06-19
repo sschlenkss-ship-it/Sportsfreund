@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        body { background: #030406; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        
+        #smiley-svg { width: 300px; cursor: pointer; }
+
+        /* Animationen */
+        @keyframes blinzeln { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0); } }
+        #augenlider { transform-origin: center; animation: blinzeln 4s infinite; }
+        
+        #mouth-path { transition: d 0.3s ease; }
+        #smiley-body { transition: fill 0.5s ease; }
+    </style>
+</head>
+<body>
+
+<svg id="smiley-svg" viewBox="0 0 500 500">
+    <circle id="smiley-body" cx="250" cy="250" r="230" fill="#FFD700" stroke="#B8860B" stroke-width="10" />
+
+    <g id="augen-gruppe">
+        <circle cx="170" cy="200" r="45" fill="white" /><circle cx="170" cy="200" r="20" fill="black" />
+        <circle cx="330" cy="200" r="45" fill="white" /><circle cx="330" cy="200" r="20" fill="black" />
+        
+        <g id="augenlider">
+            <rect x="125" y="155" width="90" height="90" fill="#FFD700" />
+            <rect x="285" y="155" width="90" height="90" fill="#FFD700" />
+        </g>
+    </g>
+
+    <path id="mouth-path" d="M 180,350 Q 250,350 320,350" stroke="#800000" stroke-width="15" fill="none" stroke-linecap="round" />
+</svg>
+
+<script>
+    function updateSmiley(schritte) {
+        const body = document.getElementById('smiley-body');
+        const mouth = document.getElementById('mouth-path');
+        
+        // 1. Farbe
+        if (schritte < 2000) body.setAttribute('fill', '#8B0000');
+        else if (schritte < 8000) body.setAttribute('fill', '#22c55e');
+        else body.setAttribute('fill', '#FFD700');
+
+        // 2. Mundkurve
+        let curve = 350 + (schritte / 50); 
+        mouth.setAttribute('d', `M 180,350 Q 250,${curve} 320,350`);
+    }
+</script>
+</body>
+</html>
