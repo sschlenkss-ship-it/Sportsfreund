@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        body { background: #030406; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        
+        #smiley-wrapper { width: 300px; position: relative; }
+        
+        /* Deine Original-Grafik */
+        #smiley-img { width: 100%; transition: filter 0.8s ease; }
+        
+        /* Animation für deine Original-Augen */
+        @keyframes blinzeln { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0); } }
+        #smiley-img { animation: blinzeln 5s infinite; transform-origin: center; }
+    </style>
+</head>
+<body>
+
+    <div style="color: white; margin-bottom: 20px;">
+        Schritte: <input type="number" id="stepInput" value="0" oninput="updateSmiley(this.value)">
+    </div>
+
+    <div id="smiley-wrapper">
+        <img src="button_105105.svg" id="smiley-img">
+    </div>
+
+    <script>
+        function updateSmiley(s) {
+            const img = document.getElementById('smiley-img');
+            
+            // Mit hue-rotate verändern wir die Grundfarbe deines SVGs, 
+            // während die Details (Augen, Schatten) erhalten bleiben.
+            if (s < 2000) {
+                img.style.filter = "hue-rotate(270deg) saturate(200%)"; // Dunkelrot/Violett
+            } else if (s < 8000) {
+                img.style.filter = "hue-rotate(120deg) saturate(150%)"; // Grün
+            } else {
+                img.style.filter = "hue-rotate(0deg) saturate(100%)"; // Original-Gold
+            }
+        }
+    </script>
+</body>
+</html>
