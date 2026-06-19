@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        .smiley-container { width: 300px; margin: 50px auto; position: relative; }
+        /* Dein Original-SVG ist hier die Basis */
+        #original-svg { width: 100%; height: auto; }
+        
+        /* Die Animationen greifen direkt auf die Pfade deines Originals zu */
+        #mund-pfad { transition: d 0.3s ease; stroke: #800000; stroke-width: 8; fill: none; stroke-linecap: round; }
+        @keyframes blinzeln { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0); } }
+        #augen-gruppe { transform-origin: center; animation: blinzeln 5s infinite; }
+    </style>
+</head>
+<body>
+
+<div class="smiley-container">
+    <svg id="original-svg" viewBox="0 0 500 500">
+        <use href="button_105105.svg#body" id="body-layer" />
+        
+        <g id="augen-gruppe">
+             </g>
+        
+        <path id="mund-pfad" d="M 150,350 Q 250,350 350,350" />
+    </svg>
+</div>
+
+<script>
+    function updateSportfreund(val) {
+        const mund = document.getElementById('mund-pfad');
+        // Stimmung berechnen
+        let curve = 350 + ((val - 5000) / 100);
+        mund.setAttribute('d', `M 150,350 Q 250,${curve} 350,350`);
+    }
+</script>
+</body>
+</html>
