@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        body { background-color: #1a1a1a; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .smiley-container { width: 300px; height: 300px; display: flex; align-items: center; justify-content: center; }
+        
+        /* Die Kontur-Magie */
+        #smiley-display { 
+            width: 100%; height: auto;
+            filter: url(#solid-outline);
+        }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0">
+  <defs>
+    <filter id="solid-outline">
+      <feMorphology in="SourceAlpha" result="dilated" operator="dilate" radius="8"/>
+      <feFlood id="outline-color" flood-color="#FF4500"/>
+      <feComposite in2="dilated" operator="in"/>
+      <feComposite in="SourceGraphic" operator="over"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="smiley-container">
+    <img src="Smiley8.png" id="smiley-display">
+</div>
+
+<input type="range" min="1" max="8" value="8" style="width: 300px; margin-top: 50px;" oninput="updateSportfreund(this.value)">
+
+<script>
+    // Liste der 8 Farben passend zu Smiley1 bis Smiley8
+    const farben = [
+        "#FFD700", // 1 Gold (sehr froh)
+        "#EEDD00", // 2 Gelb
+        "#32CD32", // 3 Grün
+        "#0000FF", // 4 Blau
+        "#00008B", // 5 Dunkelblau
+        "#800080", // 6 Lila
+        "#8B0000", // 7 Weinrot
+        "#FF4500"  // 8 Lavarot (sehr traurig)
+    ];
+
+    function updateSportfreund(val) {
+        const img = document.getElementById('smiley-display');
+        const colorFilter = document.getElementById('outline-color');
+        
+        // Bild aktualisieren
+        img.src = `Smiley${val}.png`;
+        
+        // Farbe aus dem Array holen (Index ist val-1)
+        const neueFarbe = farben[val - 1];
+        colorFilter.setAttribute('flood-color', neueFarbe);
+    }
+</script>
+</body>
+</html>
