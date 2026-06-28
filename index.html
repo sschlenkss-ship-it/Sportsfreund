@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        body { background-color: #1a1a1a; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        
+        .smiley-container { position: relative; width: 350px; height: 350px; }
+        
+        .smiley-img { 
+            width: 100%; height: 100%; 
+            position: absolute; top: 0; left: 0;
+            transition: opacity 0.6s ease-in-out;
+            /* Hier wird der leuchtende Vollton-Rahmen definiert */
+            filter: url(#glow-filter); 
+        }
+    </style>
+</head>
+<body>
+
+<!-- SVG-Filter für den perfekten Vollton-Glüheffekt -->
+<svg style="width:0; height:0; position:absolute;">
+  <defs>
+    <filter id="glow-filter" x="-20%" y="-20%" width="140%" height="140%">
+      <feMorphology operator="dilate" radius="4" in="SourceAlpha" result="expanded" />
+      <feFlood id="glow-color" flood-color="#FFD700" flood-opacity="1" />
+      <feComposite in2="expanded" operator="in" />
+      <feGaussianBlur stdDeviation="6" />
+      <feComposite in="SourceGraphic" operator="over" />
+    </filter>
+  </defs>
+</svg>
+
+<div class="smiley-container">
+    <img src="Smiley8_022008.png" id="smiley-display" class="smiley-img">
+</div>
+
+<input type="range" min="1" max="8" value="8" oninput="updateSportfreund(this.value)">
+
+<script>
+    function updateSportfreund(val) {
+        const img = document.getElementById('smiley-display');
+        const glow = document.getElementById('glow-color');
+        
+        // Bildpfad (Stelle sicher, dass deine Dateien smiley1.png bis smiley8.png heißen)
+        img.src = `smiley${val}.png`;
+        
+        // Lava-Rot bei Stufe 8, Gold bei anderen Stufen
+        const isLava = (val == 8);
+        glow.setAttribute('flood-color', isLava ? "#FF4500" : "#FFD700");
+    }
+</script>
+</body>
+</html>
