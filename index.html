@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+        body { background-color: #222; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .smiley-container { width: 300px; height: 300px; display: flex; align-items: center; justify-content: center; border: 1px dashed #555; }
+        #smiley-display { width: 100%; height: auto; filter: drop-shadow(0 0 15px #FFD700); }
+        #debug { margin-top: 20px; font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div class="smiley-container">
+    <img src="Smiley8.png" id="smiley-display" 
+         onerror="this.style.display='none'; document.getElementById('debug').innerText='FEHLER: Smiley8.png konnte nicht gefunden werden! Überprüfe Dateiname/Großschreibung.'">
+</div>
+
+<input type="range" min="1" max="8" value="8" style="width: 300px; margin-top: 50px;" 
+       oninput="updateSportfreund(this.value)">
+
+<div id="debug">System bereit. Warte auf Eingabe...</div>
+
+<script>
+    function updateSportfreund(val) {
+        const img = document.getElementById('smiley-display');
+        const debug = document.getElementById('debug');
+        
+        const fileName = `Smiley${val}.png`;
+        img.src = fileName;
+        img.style.display = 'block';
+        
+        const farbe = (val == 8) ? "#FF4500" : "#FFD700";
+        img.style.filter = `drop-shadow(0 0 15px ${farbe})`;
+        
+        debug.innerText = "Versuche zu laden: " + fileName;
+    }
+</script>
+</body>
+</html>
