@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportfreund Pro App</title>
+    <style>
+        body { 
+            background-color: #030303; 
+            margin: 0; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            overflow: hidden;
+            font-family: 'Segoe UI', sans-serif; 
+        }
+        
+        #smiley-wrapper { 
+            position: relative; 
+            width: 320px; 
+            height: 320px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #smiley-display { 
+            width: 100%; 
+            height: auto; 
+            /* Kombination: SVG Filter (Vollton) + CSS (Schein) */
+            filter: url(#combined-outline);
+            transition: all 0.5s ease-in-out;
+        }
+
+        /* Die hochwertigen Glitzer-Sterne */
+        .star {
+            position: absolute; 
+            width: 25px; 
+            height: 25px; 
+            background: gold;
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            animation: twinkle 1.8s infinite ease-in-out;
+            pointer-events: none;
+        }
+
+        @keyframes twinkle { 
+            0%, 100% { opacity: 0.2; transform: scale(0.7) rotate(0deg); } 
+            50% { opacity: 1; transform: scale(1.1) rotate(180deg); } 
+        }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0">
+  <defs>
+    <filter id="combined-outline">
+      <feMorphology in="SourceAlpha" result="dilated" operator="dilate" radius="10"/>
+      <feFlood id="outline-color" flood-color="#FFD700" result="flood-color"/>
+      <feComposite in2="dilated" operator="in" result="solid-outline"/>
+      
+      <feGaussianBlur in="solid-outline" stdDeviation="15" result="glow-blur"/>
+      <feFlood id="glow-color" flood-color="#FFD700" result="glow-color"/>
+      <feComposite in="glow-color" in2="glow-blur" operator="in" result="soft-glow"/>
+      
+      <feMerge>
+        <feMergeNode in="soft-glow"/>
+        <feMergeNode in="solid-outline"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<div id="smiley-wrapper">
+    <img src="Smiley1.png" id="smiley-display" alt="Sportfreund Pro">
+    <div id="star-container"></div>
+</div>
+
+<script>
+    /**
+     * Hauptfunktion zur Steuerung der Emotion & Belohnung
+     * @param {number} fitnessScore - Der aggregierte Fitness-Score (z.B. Schritte + Intensität)
+     */
+    function updateAppDisplay(fitnessScore) {
+        const img = document.getElementById('smiley-display');
+        const starContainer = document.getElementById('star-container');
+        const outlineFlood = document.getElementById('outline-color');
+        const glowFlood = document.getElementById('glow-color');
+        
+        // 1. Emotion (Smiley 8 bei 0 Score, Smiley 1 bei sehr hohem Score)
+        let stufe = Math.max(1, Math.min(8, 8 - Math.floor(fitnessScore / 3000)));
+        img.src = `Smiley${stufe}.png`;
+        
+        // 2. Kontur-Farben (Vollton & Schein)
+        const farben = ["#FFD700", "#FFD700", "#EEDD00", "#32CD32", "#0000FF", "#00008B", "#800080", "#FF4500"];
+        const neueFarbe = farben[stufe - 1];
+        
+        // Beide Filter-Teile gleichzeitig aktualisieren
+        outlineFlood.setAttribute('flood-color', neueFarbe);
+        glowFlood.setAttribute('flood-color', neueFarbe);
+
+        // 3. Sterne-Belohnung (wächst mit dem Score)
+        starContainer.innerHTML = '';
+        if (fitnessScore > 12000) {
+            let anzahlSterne = Math.min(15, Math.floor((fitnessScore - 10000) / 1500));
+            for(let i = 0; i < anzahlSterne; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                // Positionierung in einem Halo um den Smiley
+                let angle = (i / anzahlSterne) * Math.PI * 2;
+                let radius = 150 + Math.random() * 20; // Leicht variierender Radius
+                star.style.left = 160 + radius * Math.cos(angle) + 'px';
+                star.style.top = 160 + radius * Math.sin(angle) + 'px';
+                star.style.animationDelay = (i * 0.15) + 's';
+                starContainer.appendChild(star);
+            }
+        }
+    }
+
+    // --- TEST-MODUS (Simuliert Fitness-Score zum Ausprobieren) ---
+    // Startet bei 0, geht hoch bis 25.000 und fängt neu an.
+    let currentScore = 0;
+    setInterval(() => {
+        currentScore = (currentScore + 750) % 26000;
+        updateAppDisplay(currentScore);
+    }, 900); // Aktualisierung alle 0.9 Sekunden
+</script>
+</body>
+</html>
