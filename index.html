@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sportfreund Pro - Live Fitness</title>
+    <style>
+        body { background-color: #030303; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #smiley-wrapper { position: relative; width: 320px; height: 320px; }
+        #smiley-display { width: 100%; height: auto; filter: url(#combined-outline); transition: all 0.8s ease-in-out; }
+        .star { position: absolute; width: 25px; height: 25px; background: gold; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); animation: twinkle 1.8s infinite; pointer-events: none; }
+        @keyframes twinkle { 0%, 100% { opacity: 0.2; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.1); } }
+        /* Authentifizierungs-Button */
+        #auth-btn { position: absolute; top: 20px; z-index: 10; padding: 10px 20px; background: #FFD700; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<button id="auth-btn">Mit Fitness-Daten verbinden</button>
+
+<svg width="0" height="0"><defs><filter id="combined-outline"><feMorphology in="SourceAlpha" result="dilated" operator="dilate" radius="10"/><feFlood id="outline-color" flood-color="#FFD700"/><feComposite in2="dilated" operator="in" result="solid-outline"/><feGaussianBlur in="solid-outline" stdDeviation="15" result="glow-blur"/><feFlood id="glow-color" flood-color="#FFD700"/><feComposite in="glow-color" in2="glow-blur" operator="in" result="soft-glow"/><feMerge><feMergeNode in="soft-glow"/><feMergeNode in="solid-outline"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs></svg>
+
+<div id="smiley-wrapper">
+    <img src="Smiley4.png" id="smiley-display">
+    <div id="star-container"></div>
+</div>
+
+<script src="https://apis.google.com/js/api.js"></script>
+<script>
+    // Initialisierung der Google Fit API
+    const CLIENT_ID = 'DEINE_GOOGLE_CLOUD_CLIENT_ID.apps.googleusercontent.com';
+    const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/fitness/v1/rest"];
+    const SCOPES = "https://www.googleapis.com/auth/fitness.activity.read";
+
+    document.getElementById('auth-btn').onclick = () => {
+        gapi.load('client:auth2', () => {
+            gapi.client.init({ clientId: CLIENT_ID, discoveryDocs: DISCOVERY_DOCS, scope: SCOPES })
+            .then(() => gapi.auth2.getAuthInstance().signIn())
+            .then(fetchFitnessData);
+        });
+    };
+
+    function fetchFitnessData() {
+        // Abfrage der täglichen Schritte bei Google Fit
+        gapi.client.fitness.users.dataset.aggregate({
+            "userId": "me",
+            "aggregateBy": [{ "dataTypeName": "com.google.step_count.delta" }],
+            "bucketByTime": { "durationMillis": 86400000 },
+            "startTimeMillis": Date.now() - 86400000,
+            "endTimeMillis": Date.now()
+        }).then(response => {
+            let steps = response.result.bucket[0].dataset[0].point[0]?.value[0].intVal || 0;
+            updateApp(steps);
+        });
+    }
+
+    function updateApp(steps) {
+        let stufe = Math.max(1, Math.min(8, 8 - Math.floor(steps / 2000)));
+        document.getElementById('smiley-display').src = `Smiley${stufe}.png`;
+        // ... (Kontur/Sterne Logik wie gehabt)
+    }
+</script>
+</body>
+</html>
