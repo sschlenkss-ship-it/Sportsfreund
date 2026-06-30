@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportfreund</title>
+    <style>
+        body { background-color: #030303; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        
+        #smiley-view { display: flex; align-items: center; justify-content: center; height: 100vh; }
+        #smiley-display { width: 250px; cursor: pointer; filter: url(#slim-outline); transition: filter 0.3s; }
+
+        #dashboard-view { display: none; padding: 20px; height: 100vh; overflow-y: auto; background: #0a0a0a; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0 10px; margin-top: 20px; }
+        th { color: #888; font-size: 0.8rem; text-transform: uppercase; }
+        td { padding: 10px; background: #161616; vertical-align: middle; }
+        .sm-icon { width: 45px; height: 45px; filter: url(#slim-outline); border-radius: 50%; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        button { background: #FFD700; color: #000; border: none; padding: 10px 20px; border-radius: 25px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0"><defs><filter id="slim-outline"><feMorphology in="SourceAlpha" result="dilated" operator="dilate" radius="2"/><feFlood flood-color="#FFD700"/><feComposite in2="dilated" operator="in" result="outline"/><feMerge><feMergeNode in="outline"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs></svg>
+
+<div id="smiley-view">
+    <img src="Smiley4.png" id="smiley-display" alt="Sportfreund" ondblclick="toggleDashboard()">
+</div>
+
+<div id="dashboard-view">
+    <div class="header">
+        <h1>Freunde-Ranking</h1>
+        <button onclick="toggleDashboard()">Zurück</button>
+    </div>
+    
+    <table id="friends-table">
+        <tr><th>Status</th><th>Name</th><th>Schritte</th><th>kcal</th><th>Punkte</th></tr>
+        <!-- Wird durch JavaScript befüllt -->
+    </table>
+</div>
+
+<script>
+    // Zentrale Formel für den Smiley-Status (1 bis 8)
+    function calculateSmileyLevel(points) {
+        // Beispiel: 8000 Punkte = Stufe 1, 0 Punkte = Stufe 8
+        let level = 8 - Math.floor(points / 1000);
+        return Math.max(1, Math.min(8, level));
+    }
+
+    // Freunde-Daten (Simuliert)
+    const friends = [
+        { name: "Max", steps: 15200, kcal: 850, points: 6500 },
+        { name: "Anna", steps: 11400, kcal: 620, points: 4200 },
+        { name: "Tim", steps: 3000, kcal: 200, points: 1200 }
+    ];
+
+    function renderFriends() {
+        const table = document.getElementById('friends-table');
+        friends.forEach(f => {
+            const level = calculateSmileyLevel(f.points);
+            table.innerHTML += `
+                <tr>
+                    <td><img src="Smiley${level}.png" class="sm-icon"></td>
+                    <td>${f.name}</td>
+                    <td>${f.steps.toLocaleString()}</td>
+                    <td>${f.kcal}</td>
+                    <td>${f.points}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function toggleDashboard() {
+        const smileyView = document.getElementById('smiley-view');
+        const dashView = document.getElementById('dashboard-view');
+        dashView.style.display = (dashView.style.display === 'none' || dashView.style.display === '') ? 'block' : 'none';
+        smileyView.style.display = (dashView.style.display === 'block') ? 'none' : 'flex';
+    }
+
+    // Initialisierung
+    renderFriends();
+</script>
+</body>
+</html>
