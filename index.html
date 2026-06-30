@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Sportfreund Smart-Core</title>
+    <style>
+        body { background-color: #030303; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #smiley-wrapper { position: relative; width: 320px; height: 320px; }
+        #smiley-display { width: 100%; height: auto; filter: url(#combined-outline); transition: all 0.8s ease-in-out; }
+        /* Der Warte-Modus (falls keine Daten da sind) */
+        .loading { opacity: 0.5; filter: grayscale(100%); }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0"><defs><filter id="combined-outline"><feMorphology in="SourceAlpha" result="dilated" operator="dilate" radius="10"/><feFlood id="outline-color" flood-color="#FFD700"/><feComposite in2="dilated" operator="in" result="solid-outline"/><feGaussianBlur in="solid-outline" stdDeviation="15" result="glow-blur"/><feFlood id="glow-color" flood-color="#FFD700"/><feComposite in="glow-color" in2="glow-blur" operator="in" result="soft-glow"/><feMerge><feMergeNode in="soft-glow"/><feMergeNode in="solid-outline"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs></svg>
+
+<div id="smiley-wrapper">
+    <img src="Smiley4.png" id="smiley-display" alt="Sportfreund">
+</div>
+
+<script>
+    /**
+     * Die "Wasserdichte" Logik:
+     * 1. Berechnet den Score.
+     * 2. Reagiert auf fehlende Daten (Safety-First).
+     */
+    function updateApp(steps, heartRate) {
+        const img = document.getElementById('smiley-display');
+        
+        // Safety-Check: Falls Google keine Daten liefert
+        if (steps === undefined || steps === null) {
+            img.classList.add('loading');
+            console.log("Warte auf Daten...");
+            return;
+        }
+
+        img.classList.remove('loading');
+
+        // Logik: Score-Berechnung
+        let intensityBonus = (heartRate > 120) ? (heartRate - 120) * 100 : 0;
+        let totalScore = steps + intensityBonus;
+
+        // Emotion-Mapping (1 bis 8)
+        let stufe = Math.max(1, Math.min(8, 8 - Math.floor(totalScore / 3000)));
+        img.src = `Smiley${stufe}.png`;
+
+        // Dynamische Kontur-Farben
+        const farben = ["#FFD700", "#FFD700", "#EEDD00", "#32CD32", "#0000FF", "#00008B", "#800080", "#FF4500"];
+        let color = farben[stufe - 1];
+        document.getElementById('outline-color').setAttribute('flood-color', color);
+        document.getElementById('glow-color').setAttribute('flood-color', color);
+    }
+
+    // --- TEST-SIMULATION ---
+    // Dies wird später durch die Google-Schnittstelle ersetzt.
+    setInterval(() => {
+        let simulatedSteps = Math.floor(Math.random() * 20000);
+        let simulatedHeartRate = Math.floor(Math.random() * 150);
+        updateApp(simulatedSteps, simulatedHeartRate);
+    }, 3000);
+</script>
+</body>
+</html>
