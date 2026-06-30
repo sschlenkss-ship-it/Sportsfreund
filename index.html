@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportfreund Dashboard</title>
+    <style>
+        body { background-color: #030303; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        
+        #smiley-view { display: flex; align-items: center; justify-content: center; height: 100vh; }
+        #smiley-display { width: 250px; cursor: pointer; filter: url(#main-glow); transition: all 0.3s; }
+
+        #dashboard-view { display: none; padding: 20px; height: 100vh; overflow-y: auto; background: #0a0a0a; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0 10px; margin-top: 20px; }
+        th { color: #888; font-size: 0.8rem; text-transform: uppercase; }
+        td { padding: 12px; background: #161616; vertical-align: middle; border-bottom: 1px solid #222; }
+        .sm-icon { width: 40px; height: 40px; filter: url(#friend-outline); border-radius: 50%; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        button { background: #FFD700; color: #000; border: none; padding: 10px 20px; border-radius: 25px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0">
+    <defs>
+        <!-- Filter für den Haupt-Smiley (Button-Modus) -->
+        <filter id="main-glow">
+            <feMorphology in="SourceAlpha" operator="dilate" radius="10" result="dilated"/>
+            <feFlood flood-color="#FFD700"/><feComposite in2="dilated" operator="in"/>
+            <feGaussianBlur stdDeviation="15"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Filter für Freunde (Dezent) -->
+        <filter id="friend-outline">
+            <feMorphology in="SourceAlpha" operator="dilate" radius="1.5"/><feFlood flood-color="#FFF"/><feComposite in2="dilated" operator="in"/>
+            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+    </defs>
+</svg>
+
+<div id="smiley-view">
+    <img src="Smiley4.png" id="smiley-display" alt="Sportfreund" ondblclick="toggleDashboard()">
+</div>
+
+<div id="dashboard-view">
+    <div class="header">
+        <h1>Freunde-Ranking</h1>
+        <button onclick="toggleDashboard()">Zurück</button>
+    </div>
+    <table id="friends-table">
+        <tr><th>Status</th><th>Name</th><th>Schritte</th><th>kcal</th><th>Sportmin.</th><th>Punkte</th></tr>
+    </table>
+</div>
+
+<script>
+    const statusColors = ["#FFD700", "#FFD700", "#EEDD00", "#32CD32", "#008080", "#0000FF", "#800080", "#FF4500"];
+
+    function calculateSportPoints(steps, kcal, sportMin) {
+        return Math.floor((steps * 0.1) + (kcal * 1.0) + (sportMin * 5.0));
+    }
+
+    const friends = [
+        { name: "Max", steps: 15200, kcal: 850, sportMin: 60 },
+        { name: "Anna", steps: 2000, kcal: 450, sportMin: 120 },
+        { name: "Tim", steps: 3000, kcal: 200, sportMin: 0 }
+    ];
+
+    function renderFriends() {
+        const table = document.getElementById('friends-table');
+        friends.forEach(f => {
+            let pts = calculateSportPoints(f.steps, f.kcal, f.sportMin);
+            let lvl = Math.max(1, Math.min(8, 8 - Math.floor(pts / 2000)));
+            table.innerHTML += `
+                <tr>
+                    <td><img src="Smiley${lvl}.png" class="sm-icon" style="filter: drop-shadow(0 0 5px ${statusColors[lvl-1]})"></td>
+                    <td>${f.name}</td>
+                    <td>${f.steps.toLocaleString()}</td>
+                    <td>${f.kcal}</td>
+                    <td>${f.sportMin}</td>
+                    <td>${pts}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function toggleDashboard() {
+        const smileyView = document.getElementById('smiley-view');
+        const dashView = document.getElementById('dashboard-view');
+        dashView.style.display = (dashView.style.display === 'none' || dashView.style.display === '') ? 'block' : 'none';
+        smileyView.style.display = (dashView.style.display === 'block') ? 'none' : 'flex';
+    }
+
+    renderFriends();
+</script>
+</body>
+</html>
