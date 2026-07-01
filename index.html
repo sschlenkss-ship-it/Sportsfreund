@@ -1,0 +1,123 @@
+```html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportfreund Master-App</title>
+    <style>
+        body { background-color: #030303; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        
+        /* Hauptansicht: Smiley */
+        #smiley-view { display: flex; align-items: center; justify-content: center; height: 100vh; position: relative; }
+        #smiley-display { width: 250px; cursor: pointer; filter: url(#main-glow); transition: all 0.5s; }
+        .zz { position: absolute; top: 25%; right: 25%; font-size: 50px; display: none; animation: float 2s infinite; }
+        @keyframes float { 0% { opacity: 0; transform: translateY(0); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateY(-20px); } }
+
+        /* Einstellungen / Rädchen */
+        #settings-btn { position: absolute; top: 20px; right: 20px; font-size: 30px; cursor: pointer; color: #888; z-index: 10; }
+
+        /* Dashboard Ansicht */
+        #dashboard-view { display: none; padding: 20px; height: 100vh; background: #0a0a0a; overflow-y: auto; }
+        .menu-section { margin-bottom: 25px; padding: 15px; border: 1px solid #222; border-radius: 10px; }
+        
+        table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-top: 20px; }
+        th { color: #888; font-size: 0.7rem; text-transform: uppercase; text-align: center; }
+        td { padding: 8px; background: #161616; text-align: center; border-bottom: 1px solid #222; }
+        .sm-icon { width: 40px; height: 40px; border-radius: 50%; }
+        
+        button { background: #FFD700; color: #000; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 5px; }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0">
+    <defs>
+        <filter id="main-glow"><feMorphology in="SourceAlpha" operator="dilate" radius="10" result="dilated"/><feFlood flood-color="#FFD700"/><feComposite in2="dilated" operator="in"/><feGaussianBlur stdDeviation="15"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+</svg>
+
+<div id="smiley-view">
+    <div id="settings-btn" onclick="toggleDashboard()">⚙️</div>
+    <div id="zz-container" class="zz">💤</div>
+    <img src="Smiley4.png" id="smiley-display" alt="Sportfreund">
+</div>
+
+<div id="dashboard-view">
+    <h1>Einstellungen</h1>
+    <div class="menu-section">
+        <label>Schlafenszeit (Nachtmodus):</label><br>
+        Von: <input type="time" id="sleep-start" value="23:00">
+        Bis: <input type="time" id="sleep-end" value="07:00">
+    </div>
+    
+    <h1>Freunde-Ranking</h1>
+    <table id="friends-table">
+        <tr><th>Status</th><th>Name</th><th>Schritte</th><th>kcal</th><th>Min.</th><th>Punkte</th></tr>
+    </table>
+    
+    <button onclick="toggleDashboard()">Zurück zum Smiley</button>
+</div>
+
+<script>
+    const statusColors = ["#FF0000", "#FF4500", "#FF8C00", "#EEDD00", "#32CD32", "#00FF00", "#00DFFF", "#FFD700"];
+
+    // Logik: Punkte berechnen & Smiley wählen
+    function calculateData(steps, kcal, sportMin) {
+        let total = steps + (kcal * 2) + (sportMin * 50);
+        let pts = Math.floor(total / 20); 
+        let lvl = Math.min(8, Math.max(1, Math.floor(pts / 100) + 1));
+        return { pts, lvl };
+    }
+
+    const friends = [
+        { name: "Max", steps: 15200, kcal: 850, sportMin: 60 },
+        { name: "Anna", steps: 5000, kcal: 600, sportMin: 120 },
+        { name: "Tim", steps: 3000, kcal: 200, sportMin: 0 }
+    ];
+
+    function renderFriends() {
+        const table = document.getElementById('friends-table');
+        friends.forEach(f => {
+            let data = calculateData(f.steps, f.kcal, f.sportMin);
+            let invertedLvl = 9 - data.lvl; // Korrekte Smiley-Reihenfolge
+            table.innerHTML += `
+                <tr>
+                    <td><img src="Smiley${invertedLvl}.png" class="sm-icon" style="filter: drop-shadow(0 0 5px ${statusColors[data.lvl-1]})"></td>
+                    <td>${f.name}</td>
+                    <td>${f.steps.toLocaleString()}</td>
+                    <td>${f.kcal}</td>
+                    <td>${f.sportMin}</td>
+                    <td style="font-weight:bold; color:${statusColors[data.lvl-1]}">${data.pts}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function checkSleepMode() {
+        const now = new Date();
+        const currentTime = now.getHours() * 60 + now.getMinutes();
+        const start = document.getElementById('sleep-start').value.split(':');
+        const end = document.getElementById('sleep-end').value.split(':');
+        const startMin = parseInt(start[0]) * 60 + parseInt(start[1]);
+        const endMin = parseInt(end[0]) * 60 + parseInt(end[1]);
+        const isSleeping = (currentTime >= startMin || currentTime < endMin);
+        document.getElementById('zz-container').style.display = isSleeping ? 'block' : 'none';
+        document.getElementById('smiley-display').style.opacity = isSleeping ? '0.7' : '1';
+    }
+
+    function toggleDashboard() {
+        const dash = document.getElementById('dashboard-view');
+        const view = document.getElementById('smiley-view');
+        dash.style.display = (dash.style.display === 'none' || dash.style.display === '') ? 'block' : 'none';
+        view.style.display = (dash.style.display === 'block') ? 'none' : 'flex';
+    }
+
+    renderFriends();
+    setInterval(checkSleepMode, 60000);
+    checkSleepMode();
+</script>
+</body>
+</html>
+
+```
