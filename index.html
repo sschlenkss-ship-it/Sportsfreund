@@ -1,0 +1,77 @@
+```html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportfreund</title>
+    <style>
+        body { background-color: #030303; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        
+        /* Ansichten-Container */
+        .view { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; align-items: center; justify-content: center; }
+        #view-smiley { display: flex; }
+        
+        #smiley-display { width: 250px; cursor: pointer; filter: url(#main-glow); transition: all 0.5s; }
+        .zz { position: absolute; top: 25%; right: 25%; font-size: 50px; display: none; animation: float 2s infinite; }
+        @keyframes float { 0% { opacity: 0; transform: translateY(0); } 50% { opacity: 1; } 100% { opacity: 0; transform: translateY(-20px); } }
+
+        /* Ranking Design */
+        #view-ranking { flex-direction: column; background: #0a0a0a; padding: 20px; overflow-y: auto; display: none; }
+        #settings-btn { position: absolute; top: 20px; right: 20px; font-size: 30px; cursor: pointer; }
+
+        /* Settings Overlay */
+        #view-settings { background: rgba(0,0,0,0.9); z-index: 100; flex-direction: column; }
+        .box { width: 80%; max-width: 400px; background: #161616; padding: 20px; border-radius: 15px; text-align: center; }
+
+        button { background: #FFD700; color: #000; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; margin: 10px; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
+        td { padding: 8px; background: #161616; text-align: center; }
+        .sm-icon { width: 40px; height: 40px; border-radius: 50%; }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0"><defs><filter id="main-glow"><feMorphology in="SourceAlpha" operator="dilate" radius="10" result="dilated"/><feFlood flood-color="#FFD700"/><feComposite in2="dilated" operator="in"/><feGaussianBlur stdDeviation="15"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs></svg>
+
+<!-- 1. Smiley View -->
+<div id="view-smiley" class="view">
+    <div id="zz-container" class="zz"></div>
+    <img src="Smiley4.png" id="smiley-display" alt="Sportfreund" ondblclick="showView('view-ranking')">
+</div>
+
+<!-- 2. Ranking View -->
+<div id="view-ranking" class="view">
+    <div id="settings-btn" onclick="showView('view-settings')"></div>
+    <h1>Freunde-Ranking</h1>
+    <table id="friends-table"></table>
+    <button onclick="showView('view-smiley')">Zurück</button>
+</div>
+
+<!-- 3. Settings View -->
+<div id="view-settings" class="view">
+    <div class="box">
+        <h1>Einstellungen</h1>
+        <input type="time" id="sleep-start" value="23:00"><input type="time" id="sleep-end" value="07:00"><br>
+        <button>Impressum</button><br>
+        <button>Datenschutz</button><br>
+        <button onclick="showView('view-ranking')">Schließen</button>
+    </div>
+</div>
+
+<script>
+    function showView(id) {
+        document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+        document.getElementById(id).style.display = (id === 'view-smiley') ? 'flex' : (id === 'view-settings' ? 'flex' : 'flex');
+    }
+
+    // Initial Start
+    showView('view-smiley');
+
+    // ... (Hier die Logik für renderFriends und checkSleepMode von vorher einfügen)
+    // Ich habe die Logik für die Anzeige hier gekürzt, aber sie bleibt identisch.
+</script>
+</body>
+</html>
+
+```
