@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportfreund Master</title>
+    <style>
+        body { background-color: #030303; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        
+        .view { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; align-items: center; justify-content: center; flex-direction: column; }
+        
+        /* Smiley View */
+        #smiley-display { width: 250px; cursor: pointer; transition: all 0.5s; }
+        
+        /* Ranking View */
+        #view-ranking { background: #0a0a0a; justify-content: flex-start; padding-top: 60px; }
+        .header-row { position: absolute; top: 20px; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; box-sizing: border-box; }
+        
+        /* Settings Overlay */
+        #view-settings { background: rgba(0,0,0,0.95); z-index: 100; }
+        .box { width: 90%; max-width: 400px; background: #161616; padding: 30px; border-radius: 20px; }
+        .setting-group { margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 20px; }
+        
+        button { background: #FFD700; color: #000; border: none; padding: 12px 24px; border-radius: 25px; font-weight: bold; cursor: pointer; }
+        input[type="time"] { background: #333; color: white; border: none; padding: 10px; border-radius: 8px; margin-left: 10px; }
+        
+        footer { font-size: 0.7rem; color: #888; margin-top: 20px; display: flex; justify-content: center; gap: 20px; }
+        table { width: 95%; border-collapse: separate; border-spacing: 0 10px; }
+        td { background: #1a1a1a; padding: 15px; text-align: center; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<!-- Smiley View -->
+<div id="view-smiley" class="view" style="display: flex;">
+    <img src="Smiley4.png" id="smiley-display" alt="Sportfreund" ondblclick="showView('view-ranking')">
+</div>
+
+<!-- Ranking View -->
+<div id="view-ranking" class="view">
+    <div class="header-row">
+        <button onclick="showView('view-smiley')">Zurück</button>
+        <span style="font-size: 24px; cursor: pointer;" onclick="showView('view-settings')"></span>
+    </div>
+    <h1>Freunde-Ranking</h1>
+    <table id="friends-table"></table>
+</div>
+
+<!-- Settings View -->
+<div id="view-settings" class="view">
+    <div class="box">
+        <h1>Einstellungen</h1>
+        <div class="setting-group">
+            <p>Schlafenszeit festlegen:</p>
+            Von: <input type="time" id="sleep-start" value="23:00"><br><br>
+            Bis: <input type="time" id="sleep-end" value="07:00">
+        </div>
+        <button onclick="showView('view-ranking')">Zurück</button>
+        <footer>
+            <span>Impressum</span>
+            <span>Datenschutz</span>
+        </footer>
+    </div>
+</div>
+
+<script>
+    const friends = [
+        { name: "Max", steps: 15200, kcal: 850, sportMin: 60, lvl: 8 },
+        { name: "Anna", steps: 5000, kcal: 600, sportMin: 120, lvl: 5 }
+    ];
+
+    function showView(id) {
+        document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+        document.getElementById(id).style.display = 'flex';
+    }
+
+    function renderTable() {
+        const t = document.getElementById('friends-table');
+        friends.forEach(f => {
+            t.innerHTML += `<tr><td><img src="Smiley${9-f.lvl}.png" width="40"></td><td>${f.name}</td><td>${f.steps}</td></tr>`;
+        });
+    }
+
+    renderTable();
+</script>
+</body>
+</html>
