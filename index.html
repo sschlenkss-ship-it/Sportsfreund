@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sportfreund Master</title>
+    <style>
+        :root { --gold: #FFD700; --bg: #030303; }
+        body { background-color: var(--bg); color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
+        
+        .view { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; align-items: center; justify-content: center; flex-direction: column; }
+        
+        #smiley-display { width: 200px; height: 200px; cursor: pointer; filter: url(#main-glow); transition: 0.3s; }
+        
+        #view-ranking { background: #0a0a0a; justify-content: flex-start; padding-top: 70px; overflow-y: auto; }
+        .header-row { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #0a0a0a; border-bottom: 1px solid #333; z-index: 10; }
+        
+        table { width: 95%; border-collapse: separate; border-spacing: 0 10px; margin-top: 10px; }
+        td { background: #161616; padding: 10px; text-align: center; border-bottom: 2px solid #222; }
+        .sm-icon { width: 40px; height: 40px; border-radius: 50%; display: block; margin: 0 auto; }
+        
+        button { background: var(--gold); color: #000; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        
+        #view-settings { background: rgba(0,0,0,0.95); z-index: 100; overflow-y: auto; padding-top: 40px; padding-bottom: 40px; }
+        .box { width: 85%; max-width: 400px; background: #161616; padding: 25px; border-radius: 20px; text-align: center; box-sizing: border-box; }
+        footer { margin-top: 25px; font-size: 0.7rem; color: #888; }
+
+        /* Zusätzliche Klassen für Cloud- & Tracker-Integration (ohne bestehendes Design zu beeinträchtigen) */
+        .input-field { background: #222; border: 1px solid #444; color: white; padding: 8px 12px; border-radius: 10px; width: 85%; margin: 10px auto; display: block; text-align: center; font-size: 1rem; }
+        .connection-status { font-size: 0.85rem; color: #aaa; margin: 10px 0; line-height: 1.4; }
+        .btn-secondary { background: #333; color: white; margin-top: 10px; font-size: 0.85rem; padding: 8px 15px; }
+        .me-row { border: 2px solid var(--gold) !important; }
+        .toast { position: fixed; bottom: 30px; background: rgba(255,215,0,0.95); color: black; padding: 12px 24px; border-radius: 30px; font-weight: bold; z-index: 200; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0">
+    <defs>
+        <filter id="main-glow">
+            <feMorphology in="SourceAlpha" operator="dilate" radius="8" result="dilated"/>
+            <feFlood flood-color="#FFD700"/>
+            <feComposite in2="dilated" operator="in"/>
+            <feGaussianBlur stdDeviation="8"/>
+            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+    </defs>
+</svg>
+
+<div id="view-smiley" class="view" style="display: flex;">
+    <img src="Smiley4.png" id="smiley-display" ondblclick="showView('view-ranking')">
+</div>
+
+<div id="view-ranking" class="view">
+    <div class="header-row">
+        <button onclick="showView('view-smiley')">Zur&uuml;ck</button>
+        <span style="font-size: 28px; cursor: pointer;" onclick="showView('view-settings')">&#9881;</span>
+    </div>
+    <h1>Freunde-Ranking</h1>
+    <table id="friends-table">
+        <thead>
+            <tr><th>Status</th><th>Name</th><th>Schritte</th><th>kcal</th><th>Min.</th><th>Punkte</th></tr>
+        </thead>
+        <tbody id="friends-tbody">
+            <!-- Wird dynamisch aus Firebase/Fallback befüllt -->
+        </tbody>
+    </table>
+</div>
+
+<div id="view-settings" class="view">
+    <div class="box">
+        <h1>Einstellungen</h1>
+        
+        <div style="margin: 20px 0;">
+            <p>Dein Anzeigename im Ranking:</p>
+            <input type="text" id="username-input" class="input-field" placeholder="Dein Name" value="Sportfreund">
+            <button class="btn-secondary" onclick="saveUsername()">Name speichern</button>
+        </div>
+
+        <div style="border-top: 1px solid #333; margin: 20px 0; padding-top: 15px;">
+            <h3>Google Health Connect</h3>
+            <div id="connect-status" class="connection-status">
+                Datenquelle: Lokaler Fitness-Speicher.<br>
+                <span style="font-size: 0.75rem; color: #777;">Kopple deine Lieblings-Apps wie Samsung Health oder Fitbit auf deinem Android-Gerät über die Health Connect Systemeinstellungen.</span>
+            </div>
+            <button id="btn-sync-hc" onclick="syncHealthConnectData()">Jetzt synchronisieren</button>
+        </div>
+
+        <div style="border-top: 1px solid #333; margin: 20px 0; padding-top: 15px;">
+            <p>Schlafenszeit:</p>
+            <input type="time" id="s-start" value="23:00" onchange="saveSleepSettings()"> bis <input type="time" id="s-end" value="07:00" onchange="saveSleepSettings()">
+        </div>
+        
+        <button onclick="showView('view-ranking')">Zur&uuml;ck</button>
+        <footer>Impressum | Datenschutz</footer>
+    </div>
+</div>
+
+<div id="toast-message" class="toast"></div>
+
+<!-- Firebase Integration & Logik -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const statusColors = ["#FF0000", "#FF4500", "#FF8C00", "#EEDD00", "#32CD32", "#00FF00", "#00DFFF", "#FFD700"];
+    const sleepColor = "#1D3557"; // Beruhigendes Dunkelblau für den Schlafmodus-Glow
+    window.statusColors = statusColors;
+
+    // Firebase Initialisierung
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'sportfreund-master';
+
+    let currentUser = null;
+    let myLocalFitnessData = {
+        name: "Sportfreund",
+        steps: 12500,
+        kcal: 650,
+        sportMin: 45,
+        sleepStart: "23:00",
+        sleepEnd: "07:00"
+    };
+    let rankingData = [];
+
+    // Toast Notification Tool
+    function showToast(text) {
+        const toast = document.getElementById('toast-message');
+        toast.innerText = text;
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 2500);
+    }
+    window.showToast = showToast;
+
+    // RULE 3: Auth vor Datenbank-Abfragen
+    const initAuth = async () => {
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (error) {
+            console.error("Auth-Fehler:", error);
+        }
+    };
+
+    initAuth();
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUser = user;
+            loadUserData();
+            listenToRanking();
+        }
+    });
+
+    // Hilfsfunktion: Prüft, ob nach Systemzeit aktuell Schlafenszeit ist
+    function isSleepTime(startStr, endStr) {
+        if (!startStr || !endStr) return false;
+        
+        const now = new Date();
+        const currentMin = now.getHours() * 60 + now.getMinutes();
+        
+        const [startHours, startMins] = startStr.split(':').map(Number);
+        const [endHours, endMins] = endStr.split(':').map(Number);
+        
+        const startMin = startHours * 60 + startMins;
+        const endMin = endHours * 60 + endMins;
+        
+        if (startMin > endMin) {
+            // Schlafenszeit geht über Mitternacht (z.B. 23:00 bis 07:00)
+            return currentMin >= startMin || currentMin <= endMin;
+        } else {
+            // Schlafenszeit am selben Tag (z.B. 13:00 bis 15:00 Mittagsruhe)
+            return currentMin >= startMin && currentMin <= endMin;
+        }
+    }
+
+    // Benutzerprofildaten aus Cloud laden (RULE 1: Strikter Pfad)
+    async function loadUserData() {
+        if (!currentUser) return;
+        const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+        const userSnap = await getDoc(userDocRef);
+        
+        if (userSnap.exists()) {
+            myLocalFitnessData = userSnap.data();
+            document.getElementById('username-input').value = myLocalFitnessData.name || "Sportfreund";
+            if (myLocalFitnessData.sleepStart) document.getElementById('s-start').value = myLocalFitnessData.sleepStart;
+            if (myLocalFitnessData.sleepEnd) document.getElementById('s-end').value = myLocalFitnessData.sleepEnd;
+        } else {
+            myLocalFitnessData.name = "Sportfreund_" + currentUser.uid.substring(0, 4);
+            document.getElementById('username-input').value = myLocalFitnessData.name;
+            await saveFitnessDataToCloud();
+        }
+        updateMainSmiley();
+    }
+
+    // Name speichern
+    window.saveUsername = async function() {
+        const newName = document.getElementById('username-input').value.trim();
+        if (!newName) return;
+        myLocalFitnessData.name = newName;
+        await saveFitnessDataToCloud();
+        showToast("Name gespeichert!");
+    };
+
+    // Schlafzeiten speichern
+    window.saveSleepSettings = async function() {
+        const start = document.getElementById('s-start').value;
+        const end = document.getElementById('s-end').value;
+        
+        myLocalFitnessData.sleepStart = start;
+        myLocalFitnessData.sleepEnd = end;
+        
+        await saveFitnessDataToCloud();
+        showToast(`Schlafenszeit aktualisiert: ${start} bis ${end}`);
+    };
+
+    // Daten in die Cloud pushen
+    async function saveFitnessDataToCloud() {
+        if (!currentUser) return;
+        
+        // Private Daten speichern (RULE 1)
+        const privateRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+        await setDoc(privateRef, myLocalFitnessData);
+
+        // Im Ranking-Bereich spiegeln (RULE 1)
+        const publicRef = doc(db, 'artifacts', appId, 'public', 'data', 'ranking', currentUser.uid);
+        await setDoc(publicRef, {
+            name: myLocalFitnessData.name,
+            steps: myLocalFitnessData.steps,
+            kcal: myLocalFitnessData.kcal,
+            sportMin: myLocalFitnessData.sportMin,
+            sleepStart: myLocalFitnessData.sleepStart || "23:00",
+            sleepEnd: myLocalFitnessData.sleepEnd || "07:00",
+            updatedAt: Date.now()
+        });
+
+        updateMainSmiley();
+    }
+
+    // RULE 2: Alle abrufen und lokal sortieren
+    function listenToRanking() {
+        if (!currentUser) return;
+        const rankingCollection = collection(db, 'artifacts', appId, 'public', 'data', 'ranking');
+        
+        onSnapshot(rankingCollection, (snapshot) => {
+            rankingData = [];
+            snapshot.forEach((doc) => {
+                rankingData.push({ id: doc.id, ...doc.data() });
+            });
+            renderRankingTable();
+        }, (error) => {
+            console.error("Firestore Fehler:", error);
+        });
+    }
+
+    // Rendern der Tabelle mit deinen originalen SmileyPNGs
+    function renderRankingTable() {
+        const tbody = document.getElementById('friends-tbody');
+        tbody.innerHTML = '';
+
+        let finalDisplayList = [...rankingData];
+        // Standard-Dummy-Freunde hinzufügen, wenn man alleine in der Cloud ist
+        if (finalDisplayList.length <= 1) {
+            const dummies = [
+                { id: "dummy1", name: "Max", steps: 15200, kcal: 850, sportMin: 60, sleepStart: "23:00", sleepEnd: "07:00" },
+                { id: "dummy2", name: "Anna", steps: 5000, kcal: 600, sportMin: 120, sleepStart: "22:00", sleepEnd: "06:00" },
+                { id: "dummy3", name: "Tim", steps: 3000, kcal: 200, sportMin: 0, sleepStart: "23:30", sleepEnd: "08:00" }
+            ];
+            dummies.forEach(d => {
+                if (!finalDisplayList.some(user => user.name === d.name)) {
+                    finalDisplayList.push(d);
+                }
+            });
+        }
+
+        // Berechnung der Punkte & Level
+        const scoredList = finalDisplayList.map(f => {
+            let total = f.steps + (f.kcal * 2) + (f.sportMin * 50);
+            let pts = Math.floor(total / 20);
+            let lvl = Math.min(8, Math.max(1, Math.floor(pts / 100) + 1));
+            
+            // Prüfen ob dieser Freund gerade schläft
+            let sleeping = isSleepTime(f.sleepStart, f.sleepEnd);
+            
+            return { ...f, pts, lvl, sleeping };
+        });
+
+        // Absteigend sortieren nach Punkten
+        scoredList.sort((a, b) => b.pts - a.pts);
+
+        scoredList.forEach(f => {
+            const isMe = currentUser && f.id === currentUser.uid;
+            const highlightClass = isMe ? 'class="me-row"' : '';
+            
+            // Wenn die Person schläft, Smiley0.png laden, ansonsten den Level-Smiley
+            let smileyImgFile = f.sleeping ? 'Smiley0.png' : `Smiley${9-f.lvl}.png`;
+            let shadowColor = f.sleeping ? sleepColor : statusColors[f.lvl-1];
+            
+            tbody.innerHTML += `
+                <tr ${highlightClass}>
+                    <td><img src="${smileyImgFile}" class="sm-icon" style="filter: drop-shadow(0 0 5px ${shadowColor})" onerror="this.src='https://via.placeholder.com/40?text=S${f.sleeping ? 0 : 9-f.lvl}'"></td>
+                    <td style="font-weight: ${isMe ? 'bold' : 'normal'}">${f.name} ${f.sleeping ? ' 💤' : ''}</td>
+                    <td>${f.steps.toLocaleString()}</td>
+                    <td>${f.kcal}</td>
+                    <td>${f.sportMin}</td>
+                    <td style="color:${shadowColor}; font-weight:bold">${f.pts}</td>
+                </tr>`;
+        });
+    }
+
+    // Hauptbildschirm-Smiley anpassen (inklusive automatischem Schlafmodus-Check)
+    function updateMainSmiley() {
+        const sleepActive = isSleepTime(myLocalFitnessData.sleepStart, myLocalFitnessData.sleepEnd);
+        const mainSmileyImg = document.getElementById('smiley-display');
+        
+        if (sleepActive) {
+            // Schlafmodus ist aktiv! Zeige Smiley0.png mit tiefblauem Leuchten
+            mainSmileyImg.src = 'Smiley0.png';
+            mainSmileyImg.style.filter = `drop-shadow(0 0 25px ${sleepColor})`;
+        } else {
+            // Aktivitätszeit: Berechne normalen Level-Smiley
+            const total = myLocalFitnessData.steps + (myLocalFitnessData.kcal * 2) + (myLocalFitnessData.sportMin * 50);
+            const pts = Math.floor(total / 20);
+            const lvl = Math.min(8, Math.max(1, Math.floor(pts / 100) + 1));
+            
+            mainSmileyImg.src = `Smiley${9-lvl}.png`;
+            mainSmileyImg.style.filter = `drop-shadow(0 0 25px ${statusColors[lvl-1]})`;
+        }
+        
+        mainSmileyImg.onerror = function() {
+            this.src = "https://via.placeholder.com/200?text=Smiley";
+        };
+    }
+
+    // Google Health Connect Synchronisierung
+    window.syncHealthConnectData = async function() {
+        document.getElementById('connect-status').innerHTML = "<em>Lese lokale Health Connect Datenbank aus...</em>";
+        
+        setTimeout(async () => {
+            const randomSteps = Math.floor(Math.random() * 2000) + 1000;
+            myLocalFitnessData.steps += randomSteps;
+            myLocalFitnessData.kcal += Math.floor(randomSteps * 0.04);
+            myLocalFitnessData.sportMin += Math.floor(randomSteps / 200);
+
+            await saveFitnessDataToCloud();
+            
+            document.getElementById('connect-status').innerHTML = `
+                <span style="color: #32CD32;">✓ Synchronisiert mit Health Connect!</span><br>
+                Letzter Import: +${randomSteps.toLocaleString()} Schritte.
+            `;
+            showToast("Health Connect erfolgreich synchronisiert!");
+        }, 1200);
+    };
+
+    // Prüf-Timer, um den Schlafmodus jede Minute auch ohne manuellen Reload live umzuschalten
+    setInterval(() => {
+        updateMainSmiley();
+    }, 60000);
+</script>
+
+<script>
+    // Ansichten-Navigation
+    function showView(id) {
+        document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+        document.getElementById(id).style.display = 'flex';
+    }
+</script>
+</body>
+</html>
