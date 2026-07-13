@@ -1,0 +1,88 @@
+name: Build Android APK
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Java installieren
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Node.js installieren
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Web-Ordner für Android vorbereiten
+        run: |
+          mkdir -p www
+          cp index.html www/
+          cp *.png www/ 2>/dev/null || true
+
+      - name: Capacitor installieren
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: Konfiguration anpassen
+        run: |
+          node -e '
+            const fs = require("fs");
+            const config = {
+              appId: "de.sportfreund.app",
+              appName: "Sportfreund Master",
+              webDir: "www",
+              server: {
+                allowNavigation: ["*"]
+              }
+            };
+            fs.writeFileSync("capacitor.config.json", JSON.stringify(config, null, 2), "utf8");
+          '
+
+      - name: Android-Projekt hinzufügen & synchronisieren
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Google Health Connect Berechtigungen eintragen
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = "android/app/src/main/AndroidManifest.xml";
+            let content = fs.readFileSync(path, "utf8");
+            
+            const perms = `
+              <uses-permission android:name="android.permission.health.READ_STEPS"/>
+              <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
+              <queries>
+                  <package android:name="com.google.android.apps.healthdata" />
+              </queries>
+            `;
+            
+            if (!content.includes("READ_STEPS")) {
+              content = content.replace("</manifest>", perms + "\n</manifest>");
+              fs.writeFileSync(path, content, "utf8");
+              console.log("Health Connect Berechtigungen erfolgreich integriert!");
+            }
+          '
+
+      - name: APK bauen (Kompilieren)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Fertige APK bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: sportfreund-app
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
