@@ -85,7 +85,7 @@ jobs:
             }
           '
 
-      - name: Google Health Connect & Rationale-Filter & Meta-Data im Manifest eintragen
+      - name: Dual-XML-Manifest-Injektion (Sichtbarkeit für Android 13 & 14 erzwingen!)
         run: |
           node -e '
             const fs = require("fs");
@@ -93,50 +93,57 @@ jobs:
             if (fs.existsSync(path)) {
               let content = fs.readFileSync(path, "utf8");
               
-              // 1. Berechtigungen deklarieren (Offizielles Android-Health-Schema)
+              // Bereinigungs-Schutz gegen Duplikate
+              content = content.replace(/<uses-permission android:name="android\\.permission\\.health\\..*?"\\s*\\/>/g, "");
+              content = content.replace(/<uses-permission android:name="androidx\\.health\\.permission\\..*?"\\s*\\/>/g, "");
+              content = content.replace(/<uses-permission android:name="android\\.permission\\.SYSTEM_ALERT_WINDOW"\\s*\\/>/g, "");
+              content = content.replace(/<queries>.*?<\\/queries>/gs, "");
+              content = content.replace(/<meta-data android:name="androidx\\.health\\.connect\\..*?"\\s*\\/>/g, "");
+              
+              // Wir injizieren die Berechtigungen für Android 13 UND 14 gleichzeitig!
               const perms = `
-                <uses-permission android:name="android.permission.health.READ_STEPS"/>
-                <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
-                <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
-                <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-                <queries>
-                    <package android:name="com.google.android.apps.healthdata" />
-                </queries>
+    <uses-permission android:name="android.permission.health.READ_STEPS"/>
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
+    <uses-permission android:name="androidx.health.permission.Steps.READ"/>
+    <uses-permission android:name="androidx.health.permission.ActiveCaloriesBurned.READ"/>
+    <uses-permission android:name="androidx.health.permission.HeartRate.READ"/>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
               `;
               
-              if (!content.includes("READ_STEPS")) {
-                content = content.replace("</manifest>", perms + "\\n</manifest>");
-              }
+              content = content.replace("<application", perms + "\\n    <application");
 
-              // 2. Google Rationale-Filter einbauen
-              const rationaleIntent = `
-                <intent-filter>
-                    <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
-                </intent-filter>
-              `;
-
+              // Google Rationale-Filter einbauen
               if (!content.includes("SHOW_PERMISSIONS_RATIONALE")) {
-                content = content.replace("</activity>", rationaleIntent + "\\n</activity>");
+                const rationaleIntent = `
+            <intent-filter>
+                <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+                `;
+                content = content.replace("</activity>", rationaleIntent + "\\n        </activity>");
               }
 
-              // 3. Den schwebenden Overlay-Dienst im Android-Bauplan registrieren
+              // Den schwebenden Overlay-Dienst im Android-Bauplan registrieren
               const serviceDeclaration = `
-                <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
+        <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
               `;
               if (!content.includes("OverlayService")) {
-                content = content.replace("</application>", serviceDeclaration + "\\n</application>");
+                content = content.replace("</application>", serviceDeclaration + "\\n    </application>");
               }
 
-              // 4. ABSOLUT MANDATORY: Google Health Connect Meta-Daten-Eintrag für die App-Sichtbarkeit!
+              // Google Health Connect Meta-Daten-Eintrag für Sichtbarkeit im System!
               const metadataTag = `
-                <meta-data android:name="androidx.health.connect.DETAILS_INTENT_FILTER_ACTION" android:value="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
+        <meta-data android:name="androidx.health.connect.DETAILS_INTENT_FILTER_ACTION" android:value="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
               `;
               if (!content.includes("androidx.health.connect.DETAILS_INTENT_FILTER_ACTION")) {
-                content = content.replace("</application>", metadataTag + "\\n</application>");
+                content = content.replace("</application>", metadataTag + "\\n    </application>");
               }
               
               fs.writeFileSync(path, content, "utf8");
-              console.log("System-Rechte, Google-Sicherheitsfilter, Meta-Data und Overlay-Dienst registriert!");
+              console.log("Dual-Berechtigungen und Google-Zertifikate erfolgreich injiziert!");
             }
           '
 
@@ -144,7 +151,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # MainActivity.java (Echte Java Schnittstellen und Berechtigungs-Triggervorgänge!)
+          # MainActivity.java (Echte Java-Schnittstellen und systemübergreifende Trigger!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
 
@@ -178,26 +185,40 @@ jobs:
 
                   @JavascriptInterface
                   public void triggerPermissionRequest() {
-                      // Triggert den echten Google-Berechtigungsdialog auf Systemebene
-                      try {
-                          Intent intent = new Intent("androidx.health.connect.action.REQUEST_PERMISSIONS");
-                          intent.putExtra("androidx.health.connect.extra.PERMISSION_ARRAY", new String[]{
-                              "android.permission.health.READ_STEPS",
-                              "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
-                              "android.permission.health.READ_HEART_RATE"
-                          });
-                          startActivity(intent);
-                      } catch (Exception e) {
-                          try {
-                              Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
-                              startActivity(intent);
-                          } catch (Exception ex) {
-                              try {
-                                  Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"));
-                                  startActivity(intent);
-                              } catch (Exception err) {}
+                      runOnUiThread(new Runnable() {
+                          @Override
+                          public void run() {
+                              // Android 14+ Dialog-Trigger
+                              if (Build.VERSION.SDK_INT >= 34) {
+                                  requestPermissions(new String[]{
+                                      "android.permission.health.READ_STEPS",
+                                      "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+                                      "android.permission.health.READ_HEART_RATE"
+                                  }, 1001);
+                              } else {
+                                  // Absolut stabiler Android 13 Trigger für Health Connect!
+                                  try {
+                                      Intent intent = new Intent("androidx.health.connect.action.REQUEST_PERMISSIONS");
+                                      intent.putExtra("androidx.health.connect.extra.PERMISSION_ARRAY", new String[]{
+                                          "androidx.health.permission.Steps.READ",
+                                          "androidx.health.permission.ActiveCaloriesBurned.READ",
+                                          "androidx.health.permission.HeartRate.READ"
+                                      });
+                                      startActivity(intent);
+                                  } catch (Exception e) {
+                                      try {
+                                          Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
+                                          startActivity(intent);
+                                      } catch (Exception ex) {
+                                          try {
+                                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"));
+                                              startActivity(intent);
+                                          } catch (Exception err) {}
+                                      }
+                                  }
+                              }
                           }
-                      }
+                      });
                   }
 
                   @JavascriptInterface
@@ -236,7 +257,7 @@ jobs:
           }
           EOF
 
-          # OverlayService.java (Mit weitem Layout zur Vermeidung von Schein-Clipping!)
+          # OverlayService.java (Mit riesigem, unbeschnittenem Neon-Glow!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
 
@@ -277,20 +298,19 @@ jobs:
 
                   containerLayout = new FrameLayout(this);
 
-                  // 1. Großzügiger, radialer Glow im Hintergrund
+                  // 1. Riesiger radialer Glow im Hintergrund (360x360 Pixel!)
                   glowBackground = new View(this);
-                  updateGlowColor("#FFD700"); // Standard-Gold-Schein
+                  updateGlowColor("#FFD700"); 
                   
-                  // Wir geben dem Schein viel Platz (160x160), damit er weich ausläuft
-                  FrameLayout.LayoutParams glowParams = new FrameLayout.LayoutParams(160, 160);
+                  FrameLayout.LayoutParams glowParams = new FrameLayout.LayoutParams(360, 360);
                   glowParams.gravity = Gravity.CENTER;
                   containerLayout.addView(glowBackground, glowParams);
 
-                  // 2. Smiley im Vordergrund (130x130) für perfekten Kontrast
+                  // 2. Doppelt so großer Smiley im Vordergrund (280x280 Pixel!)
                   floatingSmiley = new ImageView(this);
                   floatingSmiley.setScaleType(ImageView.ScaleType.FIT_CENTER);
                   
-                  FrameLayout.LayoutParams smileyParams = new FrameLayout.LayoutParams(130, 130);
+                  FrameLayout.LayoutParams smileyParams = new FrameLayout.LayoutParams(280, 280);
                   smileyParams.gravity = Gravity.CENTER;
                   containerLayout.addView(floatingSmiley, smileyParams);
 
@@ -301,18 +321,18 @@ jobs:
                       layoutType = WindowManager.LayoutParams.TYPE_PHONE;
                   }
 
-                  // Container-Fenster ist 240x240 groß -> Absolut kein Clipping-Risiko mehr!
+                  // Gigantischer Fensterrahmen (450x450), damit nichts clippt
                   params = new WindowManager.LayoutParams(
-                          240, 
-                          240,
+                          450, 
+                          450,
                           layoutType,
                           WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                           PixelFormat.TRANSLUCENT
                   );
 
                   params.gravity = Gravity.TOP | Gravity.START;
-                  params.x = 200;
-                  params.y = 200;
+                  params.x = 150;
+                  params.y = 150;
 
                   windowManager.addView(containerLayout, params);
 
@@ -380,11 +400,10 @@ jobs:
                       final GradientDrawable drawable = new GradientDrawable();
                       drawable.setShape(GradientDrawable.OVAL);
                       drawable.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-                      drawable.setGradientRadius(80f); // Halbe Breite des Schein-Layouts
+                      drawable.setGradientRadius(180f); // Perfekt abgestimmt
                       drawable.setGradientCenter(0.5f, 0.5f);
                       
-                      // Dreistufiger Farbverlauf für einen echten neon-artigen, extrem weichen Glow-Effekt
-                      int semiTrans = Color.argb(130, Color.red(color), Color.green(color), Color.blue(color));
+                      int semiTrans = Color.argb(120, Color.red(color), Color.green(color), Color.blue(color));
                       drawable.setColors(new int[]{color, semiTrans, Color.TRANSPARENT});
                       
                       new Handler(Looper.getMainLooper()).post(new Runnable() {
