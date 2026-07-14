@@ -77,7 +77,7 @@ jobs:
             if (fs.existsSync(path)) {
               let content = fs.readFileSync(path, "utf8");
               
-              // 1. Berechtigungen deklarieren
+              // 1. Berechtigungen deklarieren (Offizielles Android-Health-Schema)
               const perms = `
                 <uses-permission android:name="android.permission.health.READ_STEPS"/>
                 <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
@@ -92,7 +92,7 @@ jobs:
                 content = content.replace("</manifest>", perms + "\\n</manifest>");
               }
 
-              // 2. Google Rationale-Filter einbauen
+              // 2. Google Rationale-Filter einbauen (Zwingend für Health Connect Sichtbarkeit)
               const rationaleIntent = `
                 <intent-filter>
                     <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
@@ -120,7 +120,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # MainActivity.java in purem Java (Jetzt fehlerfrei!)
+          # MainActivity.java (Korrigiertes Java ohne Syntaxfehler!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
 
@@ -154,19 +154,29 @@ jobs:
 
                   @JavascriptInterface
                   public void triggerPermissionRequest() {
-                      // Öffnet die offizielle Google Health Connect Berechtigungsseite
+                      // Native, direkte Abfrage-Absicht für den Google Health Berechtigungsdialog!
                       try {
-                          Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
+                          Intent intent = new Intent("androidx.health.connect.action.REQUEST_PERMISSIONS");
+                          intent.putExtra("androidx.health.connect.extra.PERMISSION_ARRAY", new String[]{
+                              "android.permission.health.READ_STEPS",
+                              "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+                              "android.permission.health.READ_HEART_RATE"
+                          });
                           startActivity(intent);
                       } catch (Exception e) {
+                          // Fallback zu den globalen Einstellungen
                           try {
-                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"));
+                              Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
                               startActivity(intent);
-                          } catch (Exception ex) {}
+                          } catch (Exception ex) {
+                              try {
+                                  Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"));
+                                  startActivity(intent);
+                              } catch (Exception err) {}
+                          }
                       }
                   }
 
-                  // Startet den schwebenden Dienst
                   @JavascriptInterface
                   public void startFloatingWidget() {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
@@ -178,14 +188,12 @@ jobs:
                       }
                   }
 
-                  // Beendet den schwebenden Dienst
                   @JavascriptInterface
                   public void stopFloatingWidget() {
                       Intent intent = new Intent(MainActivity.this, OverlayService.class);
                       stopService(intent);
                   }
 
-                  // Updatet das Bild des schwebenden Smileys in Echtzeit mit dem echten Gesicht aus dem Web!
                   @JavascriptInterface
                   public void updateWidgetImage(String imageUrl) {
                       Intent intent = new Intent(MainActivity.this, OverlayService.class);
@@ -193,11 +201,20 @@ jobs:
                       intent.putExtra("IMAGE_URL", imageUrl);
                       startService(intent);
                   }
+
+                  // Aktualisiert die Schein-Farbe des schwebenden Smileys passend zum Punktestand
+                  @JavascriptInterface
+                  public void updateWidgetGlow(String hexColor) {
+                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
+                      intent.setAction("UPDATE_GLOW");
+                      intent.putExtra("GLOW_COLOR", hexColor);
+                      startService(intent);
+                  }
               }
           }
           EOF
 
-          # OverlayService.java (Reines Java zum pixelgenauen Laden und Anzeigen des Gesichts!)
+          # OverlayService.java (Mit dynamischer, farbiger Scheinberechnung!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
 
@@ -205,7 +222,9 @@ jobs:
           import android.content.Intent;
           import android.graphics.Bitmap;
           import android.graphics.BitmapFactory;
-          import android.graphics.PixelFormat;
+          import android.graphics.Color;
+          importimport android.graphics.PixelFormat;
+          import android.graphics.drawable.GradientDrawable;
           import android.os.Handler;
           import android.os.IBinder;
           import android.os.Looper;
@@ -213,12 +232,15 @@ jobs:
           import android.view.MotionEvent;
           import android.view.View;
           import android.view.WindowManager;
+          import android.widget.FrameLayout;
           import android.widget.ImageView;
           import java.net.URL;
 
           public class OverlayService extends Service {
               private WindowManager windowManager;
+              private FrameLayout containerLayout;
               private ImageView floatingSmiley;
+              private View glowBackground;
               private WindowManager.LayoutParams params;
 
               @Override
@@ -231,9 +253,30 @@ jobs:
                   super.onCreate();
                   windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
+                  // Wir bauen einen Container, der den Schein und den Smiley bündelt
+                  containerLayout = new FrameLayout(this);
+
+                  // 1. Der farbige Schein im Hintergrund des Smileys
+                  glowBackground = new View(this);
+                  updateGlowColor("#FFD700"); // Standard-Gold-Schein
+                  
+                  FrameLayout.LayoutParams glowParams = new FrameLayout.LayoutParams(
+                          140, // Etwas kleiner als der Container für perfekten Randlauf
+                          140
+                  );
+                  glowParams.gravity = Gravity.CENTER;
+                  containerLayout.addView(glowBackground, glowParams);
+
+                  // 2. Das echte Smiley Gesicht im Vordergrund
                   floatingSmiley = new ImageView(this);
                   floatingSmiley.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                  floatingSmiley.setAlpha(0.95f);
+                  
+                  FrameLayout.LayoutParams smileyParams = new FrameLayout.LayoutParams(
+                          160,
+                          160
+                  );
+                  smileyParams.gravity = Gravity.CENTER;
+                  containerLayout.addView(floatingSmiley, smileyParams);
 
                   int layoutType;
                   if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -243,8 +286,8 @@ jobs:
                   }
 
                   params = new WindowManager.LayoutParams(
-                          180, // Breite in Pixeln
-                          180, // Höhe in Pixeln
+                          220, // Ausreichend Platz für den Schein am Rand
+                          220,
                           layoutType,
                           WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                           PixelFormat.TRANSLUCENT
@@ -254,9 +297,10 @@ jobs:
                   params.x = 200;
                   params.y = 200;
 
-                  windowManager.addView(floatingSmiley, params);
+                  windowManager.addView(containerLayout, params);
 
-                  floatingSmiley.setOnTouchListener(new View.OnTouchListener() {
+                  // Macht das gesamte Layout frei verschiebbar
+                  containerLayout.setOnTouchListener(new View.OnTouchListener() {
                       private int lastAction;
                       private int initialX;
                       private int initialY;
@@ -286,7 +330,7 @@ jobs:
                               case MotionEvent.ACTION_MOVE:
                                   params.x = initialX + (int) (event.getRawX() - initialTouchX);
                                   params.y = initialY + (int) (event.getRawY() - initialTouchY);
-                                  windowManager.updateViewLayout(floatingSmiley, params);
+                                  windowManager.updateViewLayout(containerLayout, params);
                                   lastAction = event.getAction();
                                   return true;
                           }
@@ -297,13 +341,44 @@ jobs:
 
               @Override
               public int onStartCommand(Intent intent, int flags, int startId) {
-                  if (intent != null && "UPDATE_IMAGE".equals(intent.getAction())) {
-                      String imageUrl = intent.getStringExtra("IMAGE_URL");
-                      if (imageUrl != null) {
-                          downloadAndSetImage(imageUrl);
+                  if (intent != null) {
+                      String action = intent.getAction();
+                      if ("UPDATE_IMAGE".equals(action)) {
+                          String imageUrl = intent.getStringExtra("IMAGE_URL");
+                          if (imageUrl != null) {
+                              downloadAndSetImage(imageUrl);
+                          }
+                      } else if ("UPDATE_GLOW".equals(action)) {
+                          String glowColor = intent.getStringExtra("GLOW_COLOR");
+                          if (glowColor != null) {
+                              updateGlowColor(glowColor);
+                          }
                       }
                   }
                   return START_STICKY;
+              }
+
+              private void updateGlowColor(String hexColor) {
+                  try {
+                      int color = Color.parseColor(hexColor);
+                      GradientDrawable drawable = new GradientDrawable();
+                      drawable.setShape(GradientDrawable.OVAL);
+                      // Ein weicher Verlauf erzeugt einen wunderschönen Glow-Effekt!
+                      drawable.setColors(new int[]{color, Color.TRANSPARENT});
+                      drawable.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+                      drawable.setGradientRadius(75f);
+                      
+                      new Handler(Looper.getMainLooper()).post(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (glowBackground != null) {
+                                  glowBackground.setBackground(drawable);
+                              }
+                          }
+                      });
+                  } catch (Exception e) {
+                      e.printStackTrace();
+                  }
               }
 
               private void downloadAndSetImage(final String urlStr) {
@@ -333,8 +408,8 @@ jobs:
               @Override
               public void onDestroy() {
                   super.onDestroy();
-                  if (floatingSmiley != null) {
-                      windowManager.removeView(floatingSmiley);
+                  if (containerLayout != null) {
+                      windowManager.removeView(containerLayout);
                   }
               }
           }
