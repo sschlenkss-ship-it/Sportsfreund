@@ -120,7 +120,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # MainActivity.java (Korrigiertes Java ohne Syntaxfehler!)
+          # MainActivity.java (Korrigiertes Java!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
 
@@ -214,7 +214,7 @@ jobs:
           }
           EOF
 
-          # OverlayService.java (Mit dynamischer, farbiger Scheinberechnung!)
+          # OverlayService.java (Mit repariertem Import-Block!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
 
@@ -223,7 +223,7 @@ jobs:
           import android.graphics.Bitmap;
           import android.graphics.BitmapFactory;
           import android.graphics.Color;
-          importimport android.graphics.PixelFormat;
+          import android.graphics.PixelFormat;
           import android.graphics.drawable.GradientDrawable;
           import android.os.Handler;
           import android.os.IBinder;
