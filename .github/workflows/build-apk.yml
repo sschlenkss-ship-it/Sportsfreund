@@ -69,7 +69,23 @@ jobs:
             }
           '
 
-      - name: Google Health Connect & Rationale-Filter im Manifest eintragen
+      - name: Android Dependencies für Google Health Connect deklarieren
+        run: |
+          node -e '
+            const fs = require("fs");
+            const gradlePath = "android/app/build.gradle";
+            if (fs.existsSync(gradlePath)) {
+              let content = fs.readFileSync(gradlePath, "utf8");
+              const dependency = "\n    implementation \"androidx.health.connect:connect-client:1.1.0-alpha07\"";
+              if (!content.includes("connect-client")) {
+                content = content.replace("dependencies {", "dependencies {" + dependency);
+                fs.writeFileSync(gradlePath, content, "utf8");
+                console.log("Health Connect Client-Bibliothek erfolgreich verknüpft!");
+              }
+            }
+          '
+
+      - name: Google Health Connect & Rationale-Filter & Meta-Data im Manifest eintragen
         run: |
           node -e '
             const fs = require("fs");
@@ -92,7 +108,7 @@ jobs:
                 content = content.replace("</manifest>", perms + "\\n</manifest>");
               }
 
-              // 2. Google Rationale-Filter einbauen (Zwingend für Health Connect Sichtbarkeit)
+              // 2. Google Rationale-Filter einbauen
               const rationaleIntent = `
                 <intent-filter>
                     <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
@@ -110,9 +126,17 @@ jobs:
               if (!content.includes("OverlayService")) {
                 content = content.replace("</application>", serviceDeclaration + "\\n</application>");
               }
+
+              // 4. ABSOLUT MANDATORY: Google Health Connect Meta-Daten-Eintrag für die App-Sichtbarkeit!
+              const metadataTag = `
+                <meta-data android:name="androidx.health.connect.DETAILS_INTENT_FILTER_ACTION" android:value="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
+              `;
+              if (!content.includes("androidx.health.connect.DETAILS_INTENT_FILTER_ACTION")) {
+                content = content.replace("</application>", metadataTag + "\\n</application>");
+              }
               
               fs.writeFileSync(path, content, "utf8");
-              console.log("System-Rechte, Google-Filter und Overlay-Dienst erfolgreich registriert!");
+              console.log("System-Rechte, Google-Sicherheitsfilter, Meta-Data und Overlay-Dienst registriert!");
             }
           '
 
@@ -120,7 +144,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # MainActivity.java (Korrigiertes Java!)
+          # MainActivity.java (Echte Java Schnittstellen und Berechtigungs-Triggervorgänge!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
 
@@ -154,7 +178,7 @@ jobs:
 
                   @JavascriptInterface
                   public void triggerPermissionRequest() {
-                      // Native, direkte Abfrage-Absicht für den Google Health Berechtigungsdialog!
+                      // Triggert den echten Google-Berechtigungsdialog auf Systemebene
                       try {
                           Intent intent = new Intent("androidx.health.connect.action.REQUEST_PERMISSIONS");
                           intent.putExtra("androidx.health.connect.extra.PERMISSION_ARRAY", new String[]{
@@ -164,7 +188,6 @@ jobs:
                           });
                           startActivity(intent);
                       } catch (Exception e) {
-                          // Fallback zu den globalen Einstellungen
                           try {
                               Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
                               startActivity(intent);
@@ -202,7 +225,6 @@ jobs:
                       startService(intent);
                   }
 
-                  // Aktualisiert die Schein-Farbe des schwebenden Smileys passend zum Punktestand
                   @JavascriptInterface
                   public void updateWidgetGlow(String hexColor) {
                       Intent intent = new Intent(MainActivity.this, OverlayService.class);
@@ -214,7 +236,7 @@ jobs:
           }
           EOF
 
-          # OverlayService.java (Mit repariertem Import-Block!)
+          # OverlayService.java (Mit weitem Layout zur Vermeidung von Schein-Clipping!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
 
@@ -253,28 +275,22 @@ jobs:
                   super.onCreate();
                   windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-                  // Wir bauen einen Container, der den Schein und den Smiley bündelt
                   containerLayout = new FrameLayout(this);
 
-                  // 1. Der farbige Schein im Hintergrund des Smileys
+                  // 1. Großzügiger, radialer Glow im Hintergrund
                   glowBackground = new View(this);
                   updateGlowColor("#FFD700"); // Standard-Gold-Schein
                   
-                  FrameLayout.LayoutParams glowParams = new FrameLayout.LayoutParams(
-                          140, // Etwas kleiner als der Container für perfekten Randlauf
-                          140
-                  );
+                  // Wir geben dem Schein viel Platz (160x160), damit er weich ausläuft
+                  FrameLayout.LayoutParams glowParams = new FrameLayout.LayoutParams(160, 160);
                   glowParams.gravity = Gravity.CENTER;
                   containerLayout.addView(glowBackground, glowParams);
 
-                  // 2. Das echte Smiley Gesicht im Vordergrund
+                  // 2. Smiley im Vordergrund (130x130) für perfekten Kontrast
                   floatingSmiley = new ImageView(this);
                   floatingSmiley.setScaleType(ImageView.ScaleType.FIT_CENTER);
                   
-                  FrameLayout.LayoutParams smileyParams = new FrameLayout.LayoutParams(
-                          160,
-                          160
-                  );
+                  FrameLayout.LayoutParams smileyParams = new FrameLayout.LayoutParams(130, 130);
                   smileyParams.gravity = Gravity.CENTER;
                   containerLayout.addView(floatingSmiley, smileyParams);
 
@@ -285,9 +301,10 @@ jobs:
                       layoutType = WindowManager.LayoutParams.TYPE_PHONE;
                   }
 
+                  // Container-Fenster ist 240x240 groß -> Absolut kein Clipping-Risiko mehr!
                   params = new WindowManager.LayoutParams(
-                          220, // Ausreichend Platz für den Schein am Rand
-                          220,
+                          240, 
+                          240,
                           layoutType,
                           WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                           PixelFormat.TRANSLUCENT
@@ -299,7 +316,6 @@ jobs:
 
                   windowManager.addView(containerLayout, params);
 
-                  // Macht das gesamte Layout frei verschiebbar
                   containerLayout.setOnTouchListener(new View.OnTouchListener() {
                       private int lastAction;
                       private int initialX;
@@ -360,13 +376,16 @@ jobs:
 
               private void updateGlowColor(String hexColor) {
                   try {
-                      int color = Color.parseColor(hexColor);
-                      GradientDrawable drawable = new GradientDrawable();
+                      final int color = Color.parseColor(hexColor);
+                      final GradientDrawable drawable = new GradientDrawable();
                       drawable.setShape(GradientDrawable.OVAL);
-                      // Ein weicher Verlauf erzeugt einen wunderschönen Glow-Effekt!
-                      drawable.setColors(new int[]{color, Color.TRANSPARENT});
                       drawable.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-                      drawable.setGradientRadius(75f);
+                      drawable.setGradientRadius(80f); // Halbe Breite des Schein-Layouts
+                      drawable.setGradientCenter(0.5f, 0.5f);
+                      
+                      // Dreistufiger Farbverlauf für einen echten neon-artigen, extrem weichen Glow-Effekt
+                      int semiTrans = Color.argb(130, Color.red(color), Color.green(color), Color.blue(color));
+                      drawable.setColors(new int[]{color, semiTrans, Color.TRANSPARENT});
                       
                       new Handler(Looper.getMainLooper()).post(new Runnable() {
                           @Override
