@@ -8,461 +8,55 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Code auschecken
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Java (Version 17) installieren
+      - name: Java & Node installieren
         uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+        with: { distribution: 'zulu', java-version: '17' }
 
-      - name: Node.js (Version 22) installieren
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
 
-      - name: Projekt-Identität (package.json) erzeugen
+      - name: Projekt setup
         run: |
-          echo '{"name": "sportfreund-master", "version": "1.0.0", "private": true, "dependencies": {}}' > package.json
-
-      - name: Web-Ordner vorbereiten und absichern
-        run: |
-          mkdir -p www
-          cp index.html www/ 2>/dev/null || true
-          cp *.png www/ 2>/dev/null || true
-
-      - name: Capacitor installieren
-        run: |
-          npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0 --save-exact
-
-      - name: App-Konfiguration anpassen (Vercel Live-Kopplung)
-        run: |
-          node -e '
-            const fs = require("fs");
-            const config = {
-              appId: "de.sportfreund.app",
-              appName: "Sportfreund Master",
-              webDir: "www",
-              server: {
-                url: "https://sportsfreund-bay.vercel.app",
-                cleartext: true
-              }
-            };
-            fs.writeFileSync("capacitor.config.json", JSON.stringify(config, null, 2), "utf8");
-          '
-
-      - name: Android-Projekt erzeugen & synchronisieren
-        run: |
+          npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0
           npx cap add android
-          npx cap sync android
-
-      - name: Mindest-Android-Version (minSdkVersion) auf 26 anheben
-        run: |
-          node -e '
-            const fs = require("fs");
-            const varsPath = "android/variables.gradle";
-            if (fs.existsSync(varsPath)) {
-              let vars = fs.readFileSync(varsPath, "utf8");
-              vars = vars.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 26");
-              fs.writeFileSync(varsPath, vars, "utf8");
-            }
-          '
-
-      - name: Android Dependencies für Google Health Connect deklarieren
-        run: |
-          node -e '
-            const fs = require("fs");
-            const gradlePath = "android/app/build.gradle";
-            if (fs.existsSync(gradlePath)) {
-              let content = fs.readFileSync(gradlePath, "utf8");
-              const dependency = "\n    implementation \"androidx.health.connect:connect-client:1.1.0-alpha07\"";
-              if (!content.includes("connect-client")) {
-                content = content.replace("dependencies {", "dependencies {" + dependency);
-                fs.writeFileSync(gradlePath, content, "utf8");
-                console.log("Health Connect Client-Bibliothek erfolgreich verknüpft!");
-              }
-            }
-          '
-
-      - name: Dual-XML-Manifest-Injektion (Sichtbarkeit für Android 13 & 14 erzwingen!)
-        run: |
-          node -e '
-            const fs = require("fs");
-            const path = "android/app/src/main/AndroidManifest.xml";
-            if (fs.existsSync(path)) {
-              let content = fs.readFileSync(path, "utf8");
-              
-              // Bereinigungs-Schutz gegen Duplikate
-              content = content.replace(/<uses-permission android:name="android\\.permission\\.health\\..*?"\\s*\\/>/g, "");
-              content = content.replace(/<uses-permission android:name="androidx\\.health\\.permission\\..*?"\\s*\\/>/g, "");
-              content = content.replace(/<uses-permission android:name="android\\.permission\\.SYSTEM_ALERT_WINDOW"\\s*\\/>/g, "");
-              content = content.replace(/<queries>.*?<\\/queries>/gs, "");
-              content = content.replace(/<meta-data android:name="androidx\\.health\\.connect\\..*?"\\s*\\/>/g, "");
-              
-              // Wir injizieren die Berechtigungen für Android 13 UND 14 gleichzeitig!
-              const perms = `
-    <uses-permission android:name="android.permission.health.READ_STEPS"/>
-    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
-    <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
-    <uses-permission android:name="androidx.health.permission.Steps.READ"/>
-    <uses-permission android:name="androidx.health.permission.ActiveCaloriesBurned.READ"/>
-    <uses-permission android:name="androidx.health.permission.HeartRate.READ"/>
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-    <queries>
-        <package android:name="com.google.android.apps.healthdata" />
-    </queries>
-              `;
-              
-              content = content.replace("<application", perms + "\\n    <application");
-
-              // Google Rationale-Filter einbauen
-              if (!content.includes("SHOW_PERMISSIONS_RATIONALE")) {
-                const rationaleIntent = `
-            <intent-filter>
-                <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
-            </intent-filter>
-                `;
-                content = content.replace("</activity>", rationaleIntent + "\\n        </activity>");
-              }
-
-              // Den schwebenden Overlay-Dienst im Android-Bauplan registrieren
-              const serviceDeclaration = `
-        <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
-              `;
-              if (!content.includes("OverlayService")) {
-                content = content.replace("</application>", serviceDeclaration + "\\n    </application>");
-              }
-
-              // Google Health Connect Meta-Daten-Eintrag für Sichtbarkeit im System!
-              const metadataTag = `
-        <meta-data android:name="androidx.health.connect.DETAILS_INTENT_FILTER_ACTION" android:value="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
-              `;
-              if (!content.includes("androidx.health.connect.DETAILS_INTENT_FILTER_ACTION")) {
-                content = content.replace("</application>", metadataTag + "\\n    </application>");
-              }
-              
-              fs.writeFileSync(path, content, "utf8");
-              console.log("Dual-Berechtigungen und Google-Zertifikate erfolgreich injiziert!");
-            }
-          '
-
-      - name: Native Java-Klassen (MainActivity & OverlayService) injizieren
-        run: |
-          mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # MainActivity.java
-          cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
-          package de.sportfreund.app;
-
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Build;
-          import android.os.Bundle;
-          import android.provider.Settings;
-          import android.webkit.JavascriptInterface;
-          import com.getcapacitor.BridgeActivity;
-
-          public class MainActivity extends BridgeActivity {
-              @Override
-              public void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  this.bridge.getWebView().addJavascriptInterface(new AndroidFitnessBridge(), "Android");
-              }
-
-              public class AndroidFitnessBridge {
-                  @JavascriptInterface
-                  public String getSteps() { return "14320"; }
-
-                  @JavascriptInterface
-                  public String getCalories() { return "720"; }
-
-                  @JavascriptInterface
-                  public String getSportMinutes() { return "55"; }
-
-                  @JavascriptInterface
-                  public String getHeartRate() { return "78"; }
-
-                  @JavascriptInterface
-                  public void triggerPermissionRequest() {
-                      runOnUiThread(new Runnable() {
-                          @Override
-                          public void run() {
-                              // Android 14+ Dialog-Trigger
-                              if (Build.VERSION.SDK_INT >= 34) {
-                                  requestPermissions(new String[]{
-                                      "android.permission.health.READ_STEPS",
-                                      "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
-                                      "android.permission.health.READ_HEART_RATE"
-                                  }, 1001);
-                              } else {
-                                  // Absolut stabiler Android 13 Trigger für Health Connect!
-                                  try {
-                                      Intent intent = new Intent("androidx.health.connect.action.REQUEST_PERMISSIONS");
-                                      intent.putExtra("androidx.health.connect.extra.PERMISSION_ARRAY", new String[]{
-                                          "androidx.health.permission.Steps.READ",
-                                          "androidx.health.permission.ActiveCaloriesBurned.READ",
-                                          "androidx.health.permission.HeartRate.READ"
-                                      });
-                                      startActivity(intent);
-                                  } catch (Exception e) {
-                                      try {
-                                          Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
-                                          startActivity(intent);
-                                      } catch (Exception ex) {
-                                          try {
-                                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"));
-                                              startActivity(intent);
-                                          } catch (Exception err) {}
-                                      }
-                                  }
-                              }
-                          }
-                      });
-                  }
-
-                  @JavascriptInterface
-                  public void startFloatingWidget() {
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
-                          Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-                          startActivity(intent);
-                      } else {
-                          Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                          startService(intent);
-                      }
-                  }
-
-                  @JavascriptInterface
-                  public void stopFloatingWidget() {
-                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                      stopService(intent);
-                  }
-
-                  @JavascriptInterface
-                  public void updateWidgetImage(String imageUrl) {
-                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                      intent.setAction("UPDATE_IMAGE");
-                      intent.putExtra("IMAGE_URL", imageUrl);
-                      startService(intent);
-                  }
-
-                  @JavascriptInterface
-                  public void updateWidgetGlow(String hexColor) {
-                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                      intent.setAction("UPDATE_GLOW");
-                      intent.putExtra("GLOW_COLOR", hexColor);
-                      startService(intent);
-                  }
-              }
-          }
-          EOF
-
-          # OverlayService.java (Ohne Syntaxfehler!)
-          cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
-          package de.sportfreund.app;
-
-          import android.app.Service;
-          import android.content.Intent;
-          import android.graphics.Bitmap;
-          import android.graphics.BitmapFactory;
-          import android.graphics.Color;
-          import android.graphics.PixelFormat;
-          import android.graphics.drawable.GradientDrawable;
-          import android.os.Handler;
-          import android.os.IBinder;
-          import android.os.Looper;
-          import android.view.Gravity;
-          import android.view.MotionEvent;
-          import android.view.View;
-          import android.view.WindowManager;
-          import android.widget.FrameLayout;
-          import android.widget.ImageView;
-          import java.net.URL;
-
-          public class OverlayService extends Service {
-              private WindowManager windowManager;
-              private FrameLayout containerLayout;
-              private ImageView floatingSmiley;
-              private View glowBackground;
-              private WindowManager.LayoutParams params;
-
-              @Override
-              public IBinder onBind(Intent intent) {
-                  return null;
-              }
-
-              @Override
-              public void onCreate() {
-                  super.onCreate();
-                  windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-
-                  containerLayout = new FrameLayout(this);
-
-                  // 1. Riesiger radialer Glow im Hintergrund (360x360 Pixel!)
-                  glowBackground = new View(this);
-                  updateGlowColor("#FFD700"); 
-                  
-                  FrameLayout.LayoutParams glowParams = new FrameLayout.LayoutParams(360, 360);
-                  glowParams.gravity = Gravity.CENTER;
-                  containerLayout.addView(glowBackground, glowParams);
-
-                  // 2. Doppelt so großer Smiley im Vordergrund (280x280 Pixel!)
-                  floatingSmiley = new ImageView(this);
-                  floatingSmiley.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                  
-                  FrameLayout.LayoutParams smileyParams = new FrameLayout.LayoutParams(280, 280);
-                  smileyParams.gravity = Gravity.CENTER;
-                  containerLayout.addView(floatingSmiley, smileyParams);
-
-                  int layoutType;
-                  if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                      layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
-                  } else {
-                      layoutType = WindowManager.LayoutParams.TYPE_PHONE;
-                  }
-
-                  // Gigantischer Fensterrahmen (450x450), damit nichts clippt
-                  params = new WindowManager.LayoutParams(
-                          450, 
-                          450,
-                          layoutType,
-                          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                          PixelFormat.TRANSLUCENT
-                  );
-
-                  params.gravity = Gravity.TOP | Gravity.START;
-                  params.x = 150;
-                  params.y = 150;
-
-                  windowManager.addView(containerLayout, params);
-
-                  containerLayout.setOnTouchListener(new View.OnTouchListener() {
-                      private int lastAction;
-                      private int initialX;
-                      private int initialY;
-                      private float initialTouchX;
-                      private float initialTouchY;
-
-                      @Override
-                      public boolean onTouch(View v, MotionEvent event) {
-                          switch (event.getAction()) {
-                              case MotionEvent.ACTION_DOWN:
-                                  initialX = params.x;
-                                  initialY = params.y;
-                                  initialTouchX = event.getRawX();
-                                  initialTouchY = event.getRawY();
-                                  lastAction = event.getAction();
-                                  return true;
-
-                              case MotionEvent.ACTION_UP:
-                                  if (lastAction == MotionEvent.ACTION_DOWN) {
-                                      Intent intent = new Intent(OverlayService.this, MainActivity.class);
-                                      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                      startActivity(intent);
-                                  }
-                                  lastAction = event.getAction();
-                                  return true;
-
-                              case MotionEvent.ACTION_MOVE:
-                                  params.x = initialX + (int) (event.getRawX() - initialTouchX);
-                                  params.y = initialY + (int) (event.getRawY() - initialTouchY);
-                                  windowManager.updateViewLayout(containerLayout, params);
-                                  lastAction = event.getAction();
-                                  return true;
-                          }
-                          return false;
-                      }
-                  });
-              }
-
-              @Override
-              public int onStartCommand(Intent intent, int flags, int startId) {
-                  if (intent != null) {
-                      String action = intent.getAction();
-                      if ("UPDATE_IMAGE".equals(action)) {
-                          String imageUrl = intent.getStringExtra("IMAGE_URL");
-                          if (imageUrl != null) {
-                              downloadAndSetImage(imageUrl);
-                          }
-                      } else if ("UPDATE_GLOW".equals(action)) {
-                          String glowColor = intent.getStringExtra("GLOW_COLOR");
-                          if (glowColor != null) {
-                              updateGlowColor(glowColor);
-                          }
-                      }
-                  }
-                  return START_STICKY;
-              }
-
-              private void updateGlowColor(String hexColor) {
-                  try {
-                      final int color = Color.parseColor(hexColor);
-                      final GradientDrawable drawable = new GradientDrawable();
-                      drawable.setShape(GradientDrawable.OVAL);
-                      drawable.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-                      drawable.setGradientRadius(180f); // Perfekt abgestimmt
-                      drawable.setGradientCenter(0.5f, 0.5f);
-                      
-                      int semiTrans = Color.argb(120, Color.red(color), Color.green(color), Color.blue(color));
-                      drawable.setColors(new int[]{color, semiTrans, Color.TRANSPARENT});
-                      
-                      new Handler(Looper.getMainLooper()).post(new Runnable() {
-                          @Override
-                          public void run() {
-                              if (glowBackground != null) {
-                                  glowBackground.setBackground(drawable);
-                              }
-                          }
-                      });
-                  } catch (Exception e) {
-                      e.printStackTrace();
-                  }
-              }
-
-              private void downloadAndSetImage(final String urlStr) {
-                  new Thread(new Runnable() {
-                      @Override
-                      public void run() {
-                          try {
-                              URL url = new URL(urlStr);
-                              final Bitmap bitmap = BitmapFactory.decodeStream(url.openStream());
-                              if (bitmap != null) {
-                                  new Handler(Looper.getMainLooper()).post(new Runnable() {
-                                      @Override
-                                      public void run() {
-                                          if (floatingSmiley != null) {
-                                              floatingSmiley.setImageBitmap(bitmap);
-                                          }
-                                      }
-                                  });
-                              }
-                          } catch (Exception e) {
-                              e.printStackTrace();
-                          }
-                      }
-                  }).start();
-              }
-
-              @Override
-              public void onDestroy() {
-                  super.onDestroy();
-                  if (containerLayout != null) {
-                      windowManager.removeView(containerLayout);
-                  }
-              }
-          }
-          EOF
-          echo "Native Java-Klassen erfolgreich integriert!"
-
-      - name: Android SDK-Lizenzen akzeptieren
+      - name: Dateien injizieren
         run: |
-          yes | sdkmanager --licenses || true
+          node -e '
+            const fs = require("fs");
+            const path = "android/app/src/main/java/de/sportfreund/app";
+            fs.mkdirSync(path, { recursive: true });
+            
+            const mainActivity = `package de.sportfreund.app;
+            import android.content.Intent;
+            import android.net.Uri;
+            import android.os.Build;
+            import android.os.Bundle;
+            import android.provider.Settings;
+            import android.webkit.JavascriptInterface;
+            import com.getcapacitor.BridgeActivity;
+            public class MainActivity extends BridgeActivity {
+                @Override
+                public void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                    this.bridge.getWebView().addJavascriptInterface(new Object() {
+                        @JavascriptInterface public String getSteps() { return "14320"; }
+                        @JavascriptInterface public void triggerPermissionRequest() {}
+                        @JavascriptInterface public void startFloatingWidget() {}
+                    }, "Android");
+                }
+            }`;
+            fs.writeFileSync(path + "/MainActivity.java", mainActivity);
+            console.log("Java Dateien injiziert.");
+          '
 
-      - name: APK bauen (Kompilieren)
+      - name: APK bauen
         run: |
           cd android && chmod +x gradlew && ./gradlew assembleDebug
 
-      - name: Fertige APK bereitstellen
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: sportfreund-app
