@@ -151,7 +151,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # MainActivity.java (Echte Java-Schnittstellen und systemübergreifende Trigger!)
+          # MainActivity.java
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
 
@@ -257,7 +257,7 @@ jobs:
           }
           EOF
 
-          # OverlayService.java (Mit riesigem, unbeschnittenem Neon-Glow!)
+          # OverlayService.java (Ohne Syntaxfehler!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
 
