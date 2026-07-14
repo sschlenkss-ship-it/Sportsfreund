@@ -57,19 +57,38 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Mindest-Android-Version (minSdkVersion) auf 26 anheben
+      - name: Gradle für Kotlin und Google Health Connect konfigurieren
         run: |
           node -e '
             const fs = require("fs");
-            const varsPath = "android/variables.gradle";
-            if (fs.existsSync(varsPath)) {
-              let vars = fs.readFileSync(varsPath, "utf8");
-              vars = vars.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 26");
-              fs.writeFileSync(varsPath, vars, "utf8");
+            
+            // 1. Android SDK Versionen anpassen (Variables.gradle)
+            let vars = fs.readFileSync("android/variables.gradle", "utf8");
+            vars = vars.replace(/minSdkVersion\\s*=\\s*\\d+/, "minSdkVersion = 26");
+            fs.writeFileSync("android/variables.gradle", vars, "utf8");
+            
+            // 2. Kotlin Plugin im Haupt-Gradle einbauen
+            let rootGradle = fs.readFileSync("android/build.gradle", "utf8");
+            if (!rootGradle.includes("kotlin-gradle-plugin")) {
+              rootGradle = rootGradle.replace("dependencies {", "dependencies {\\n        classpath \"org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22\"");
+              fs.writeFileSync("android/build.gradle", rootGradle, "utf8");
+            }
+            
+            // 3. Kotlin & Health Connect im App-Gradle aktivieren
+            let appGradle = fs.readFileSync("android/app/build.gradle", "utf8");
+            if (!appGradle.includes("kotlin-android")) {
+              appGradle = "apply plugin: \'kotlin-android\'\\n" + appGradle;
+              const deps = `
+                  implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
+                  implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.6.2"
+                  implementation "androidx.health.connect:connect-client:1.1.0-alpha07"
+              `;
+              appGradle = appGradle.replace("dependencies {", "dependencies {" + deps);
+              fs.writeFileSync("android/app/build.gradle", appGradle, "utf8");
             }
           '
 
-      - name: System-Berechtigungen & Overlay-Rechte eintragen
+      - name: Google Health Connect & Rationale-Filter im Manifest eintragen
         run: |
           node -e '
             const fs = require("fs");
@@ -77,7 +96,7 @@ jobs:
             if (fs.existsSync(path)) {
               let content = fs.readFileSync(path, "utf8");
               
-              // 1. Berechtigungen deklarieren (Jetzt auch mit SYSTEM_ALERT_WINDOW für schwebende Overlays!)
+              // 1. Berechtigungen und Abfragen deklarieren
               const perms = `
                 <uses-permission android:name="android.permission.health.READ_STEPS"/>
                 <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
@@ -103,7 +122,7 @@ jobs:
                 content = content.replace("</activity>", rationaleIntent + "\\n</activity>");
               }
 
-              // 3. Den schwebenden Overlay-Dienst im Android-Bauplan registrieren
+              // 3. Den schwebenden Overlay-Dienst registrieren
               const serviceDeclaration = `
                 <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
               `;
@@ -112,100 +131,197 @@ jobs:
               }
               
               fs.writeFileSync(path, content, "utf8");
-              console.log("System-Rechte, Google-Filter und Overlay-Dienst erfolgreich registriert!");
+              console.log("Sicherheitsrechte und Google-Registrierungsfilter erfolgreich injiziert!");
             }
           '
 
-      - name: Native Java-Klassen (MainActivity & OverlayService) injizieren
+      - name: Native Java/Kotlin-Schnittstellen (MainActivity & OverlayService) injizieren
         run: |
-          mkdir -p android/app/src/main/java/de/sportfreund/app
+          # Alte Java MainActivity löschen, damit es keine Konflikte gibt
+          rm -f android/app/src/main/java/de/sportfreund/app/MainActivity.java
           
-          # MainActivity.java erstellen (inklusive Widget-Starter-Befehlen)
-          cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
-          package de.sportfreund.app;
+          # 1. Neue MainActivity.kt (Kotlin!) mit echter Google Health Connect Datenabfrage!
+          mkdir -p android/app/src/main/java/de/sportfreund/app
+          cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.kt
+          package de.sportfreund.app
 
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Build;
-          import android.os.Bundle;
-          import android.provider.Settings;
-          import android.webkit.JavascriptInterface;
-          import com.getcapacitor.BridgeActivity;
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Bundle
+          import android.webkit.JavascriptInterface
+          import androidx.lifecycle.lifecycleScope
+          import com.getcapacitor.BridgeActivity
+          import kotlinx.coroutines.launch
+          import androidx.health.connect.client.HealthConnectClient
+          import androidx.health.connect.client.permission.HealthPermission
+          import androidx.health.connect.client.records.StepsRecord
+          import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+          import androidx.health.connect.client.records.HeartRateRecord
+          import androidx.health.connect.client.request.ReadRecordsRequest
+          import java.time.Instant
+          import java.time.temporal.ChronoUnit
 
-          public class MainActivity extends BridgeActivity {
-              @Override
-              public void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  this.bridge.getWebView().addJavascriptInterface(new AndroidFitnessBridge(), "Android");
+          class MainActivity : BridgeActivity() {
+              private var healthConnectClient: HealthConnectClient? = null
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  try {
+                      healthConnectClient = HealthConnectClient.getOrCreate(this)
+                  } catch (e: Exception) {
+                      // Nicht verfügbar
+                  }
+                  bridge.webView.addJavascriptInterface(AndroidFitnessBridge(), "Android")
               }
 
-              public class AndroidFitnessBridge {
-                  @JavascriptInterface
-                  public String getSteps() { return "14320"; }
+              inner class AndroidFitnessBridge {
+                  private var lastSteps = "0"
+                  private var lastCalories = "0"
+                  private var lastHeartRate = "72"
 
                   @JavascriptInterface
-                  public String getCalories() { return "720"; }
+                  fun getSteps(): String {
+                      fetchData()
+                      return lastSteps
+                  }
 
                   @JavascriptInterface
-                  public String getSportMinutes() { return "55"; }
+                  fun getCalories(): String {
+                      return lastCalories
+                  }
 
                   @JavascriptInterface
-                  public String getHeartRate() { return "78"; }
+                  fun getSportMinutes(): String {
+                      return "55"
+                  }
 
                   @JavascriptInterface
-                  public void triggerPermissionRequest() {
+                  fun getHeartRate(): String {
+                      return lastHeartRate
+                  }
+
+                  @JavascriptInterface
+                  fun triggerPermissionRequest() {
+                      val permissions = setOf(
+                          HealthPermission.getReadPermission(StepsRecord::class),
+                          HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+                          HealthPermission.getReadPermission(HeartRateRecord::class)
+                      )
                       try {
-                          Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
-                          startActivity(intent);
-                      } catch (Exception e) {
+                          val intent = HealthConnectClient.getOrCreate(this@MainActivity)
+                              .permissionController
+                              .createRequestPermissionIntent(permissions)
+                          startActivity(intent)
+                      } catch (e: Exception) {
                           try {
-                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"));
-                              startActivity(intent);
-                          } catch (Exception ex) {}
+                              val intent = Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS")
+                              startActivity(intent)
+                          } catch (ex: Exception) {}
                       }
                   }
 
-                  // Startet den schwebenden Smiley über anderen Apps
                   @JavascriptInterface
-                  public void startFloatingWidget() {
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
-                          // Der Nutzer hat noch kein Overlay-Recht gegeben, wir schicken ihn direkt in das Einstellungsmenü!
-                          Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
-                          startActivity(intent);
+                  fun startFloatingWidget() {
+                      val intent = Intent(this@MainActivity, OverlayService::class.java)
+                      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && 
+                          !android.provider.Settings.canDrawOverlays(this@MainActivity)) {
+                          val overlayIntent = Intent(
+                              android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                              Uri.parse("package:$packageName")
+                          )
+                          startActivity(overlayIntent)
                       } else {
-                          // Erlaubnis ist da, wir starten den schwebenden Dienst!
-                          Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                          startService(intent);
+                          startService(intent)
                       }
                   }
 
-                  // Beendet den schwebenden Smiley wieder
                   @JavascriptInterface
-                  public void stopFloatingWidget() {
-                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                      stopService(intent);
+                  fun stopFloatingWidget() {
+                      val intent = Intent(this@MainActivity, OverlayService::class.java)
+                      stopService(intent)
+                  }
+
+                  @JavascriptInterface
+                  fun updateWidgetImage(imageUrl: String) {
+                      val intent = Intent(this@MainActivity, OverlayService::class.java).apply {
+                          action = "UPDATE_IMAGE"
+                          putExtra("IMAGE_URL", imageUrl)
+                      }
+                      startService(intent)
+                  }
+              }
+
+              private fun fetchData() {
+                  val client = healthConnectClient ?: return
+                  lifecycleScope.launch {
+                      try {
+                          val endTime = Instant.now()
+                          val startTime = endTime.minus(1, ChronoUnit.DAYS)
+
+                          // Schritte auslesen
+                          val stepsResponse = client.readRecords(
+                              ReadRecordsRequest(
+                                  recordType = StepsRecord::class,
+                                  timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(startTime, endTime)
+                              )
+                          )
+                          val totalSteps = stepsResponse.records.sumOf { it.count }
+                          lastSteps = totalSteps.toString()
+
+                          // Kalorien auslesen
+                          val caloriesResponse = client.readRecords(
+                              ReadRecordsRequest(
+                                  recordType = ActiveCaloriesBurnedRecord::class,
+                                  timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(startTime, endTime)
+                              )
+                          )
+                          val totalCalories = caloriesResponse.records.sumOf { it.energy.inKilocalories }.toInt()
+                          lastCalories = totalCalories.toString()
+
+                          // Puls auslesen
+                          val heartResponse = client.readRecords(
+                              ReadRecordsRequest(
+                                  recordType = HeartRateRecord::class,
+                                  timeRangeFilter = androidx.health.connect.client.time.TimeRangeFilter.between(startTime, endTime)
+                              )
+                          )
+                          if (heartResponse.records.isNotEmpty()) {
+                              val heartRates = heartResponse.records.flatMap { record -> record.samples.map { it.beatsPerMinute } }
+                              if (heartRates.isNotEmpty()) {
+                                  lastHeartRate = heartRates.average().toInt().toString()
+                              }
+                          }
+                      } catch (e: Exception) {
+                          // Fallback falls keine Erlaubnis erteilt wurde
+                      }
                   }
               }
           }
           EOF
 
-          # OverlayService.java erstellen (Das Gehirn des schwebenden Smileys!)
+          # 2. OverlayService.java (Java!) zum Laden und Anzeigen des echten Smiley-Gesichts im Hintergrund
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
 
           import android.app.Service;
           import android.content.Intent;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
           import android.graphics.PixelFormat;
+          import android.os.Handler;
           import android.os.IBinder;
+          import android.os.Looper;
           import android.view.Gravity;
           import android.view.MotionEvent;
           import android.view.View;
           import android.view.WindowManager;
           import android.widget.ImageView;
+          import java.net.URL;
 
           public class OverlayService extends Service {
               private WindowManager windowManager;
               private ImageView floatingSmiley;
+              private WindowManager.LayoutParams params;
 
               @Override
               public IBinder onBind(Intent intent) {
@@ -215,16 +331,12 @@ jobs:
               @Override
               public void onCreate() {
                   super.onCreate();
-                  
                   windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-                  // Erstellt das schwebende Bild (unseren Smiley)
                   floatingSmiley = new ImageView(this);
-                  // Standardmäßig laden wir ein Fallback-Symbol, bis das echte Webbild geladen wird
-                  floatingSmiley.setImageResource(android.R.drawable.btn_star_big_on);
-                  floatingSmiley.setAlpha(0.9f);
+                  floatingSmiley.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                  floatingSmiley.setAlpha(0.95f);
 
-                  // Setzt die genauen Fenster-Parameter für das Schwebesystem fest
                   int layoutType;
                   if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                       layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
@@ -232,7 +344,7 @@ jobs:
                       layoutType = WindowManager.LayoutParams.TYPE_PHONE;
                   }
 
-                  final WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                  params = new WindowManager.LayoutParams(
                           180, // Breite in Pixeln
                           180, // Höhe in Pixeln
                           layoutType,
@@ -240,15 +352,12 @@ jobs:
                           PixelFormat.TRANSLUCENT
                   );
 
-                  // Startposition auf dem Display definieren
                   params.gravity = Gravity.TOP | Gravity.START;
                   params.x = 200;
                   params.y = 200;
 
-                  // Schwebenden Smiley zum Bildschirm hinzufügen
                   windowManager.addView(floatingSmiley, params);
 
-                  // Macht den Smiley per Touch auf dem Display frei verschiebbar!
                   floatingSmiley.setOnTouchListener(new View.OnTouchListener() {
                       private int lastAction;
                       private int initialX;
@@ -268,7 +377,6 @@ jobs:
                                   return true;
 
                               case MotionEvent.ACTION_UP:
-                                  // Wenn es ein einfacher Klick war, öffnen wir wieder die Haupt-App!
                                   if (lastAction == MotionEvent.ACTION_DOWN) {
                                       Intent intent = new Intent(OverlayService.this, MainActivity.class);
                                       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -290,6 +398,41 @@ jobs:
               }
 
               @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  if (intent != null && "UPDATE_IMAGE".equals(intent.getAction())) {
+                      String imageUrl = intent.getStringExtra("IMAGE_URL");
+                      if (imageUrl != null) {
+                          downloadAndSetImage(imageUrl);
+                      }
+                  }
+                  return START_STICKY;
+              }
+
+              private void downloadAndSetImage(final String urlStr) {
+                  new Thread(new Runnable() {
+                      @Override
+                      public void run() {
+                          try {
+                              URL url = new URL(urlStr);
+                              final Bitmap bitmap = BitmapFactory.decodeStream(url.openStream());
+                              if (bitmap != null) {
+                                  new Handler(Looper.getMainLooper()).post(new Runnable() {
+                                      @Override
+                                      public void run() {
+                                          if (floatingSmiley != null) {
+                                              floatingSmiley.setImageBitmap(bitmap);
+                                          }
+                                      }
+                                  });
+                              }
+                          } catch (Exception e) {
+                              e.printStackTrace();
+                          }
+                      }
+                  }).start();
+              }
+
+              @Override
               public void onDestroy() {
                   super.onDestroy();
                   if (floatingSmiley != null) {
@@ -298,7 +441,7 @@ jobs:
               }
           }
           EOF
-          echo "Overlay-Service erfolgreich programmiert!"
+          echo "Native Java/Kotlin-Schnittstellen erfolgreich verknüpft!"
 
       - name: Android SDK-Lizenzen akzeptieren
         run: |
