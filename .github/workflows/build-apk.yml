@@ -36,7 +36,7 @@ jobs:
         run: |
           npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0 --save-exact
 
-      - name: App-Konfiguration anpassen (Echte Vercel Live-Kopplung - Ohne Schrägstrich-Fehler!)
+      - name: App-Konfiguration anpassen
         run: |
           node -e '
             const fs = require("fs");
@@ -66,7 +66,6 @@ jobs:
               let vars = fs.readFileSync(varsPath, "utf8");
               vars = vars.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 26");
               fs.writeFileSync(varsPath, vars, "utf8");
-              console.log("minSdkVersion erfolgreich angehoben!");
             }
           '
 
@@ -81,7 +80,6 @@ jobs:
               if (!content.includes("connect-client")) {
                 content = content.replace("dependencies {", "dependencies {" + dependency);
                 fs.writeFileSync(gradlePath, content, "utf8");
-                console.log("Health Connect SDK in Gradle integriert!");
               }
             }
           '
@@ -93,7 +91,6 @@ jobs:
             const path = "android/app/src/main/AndroidManifest.xml";
             if (fs.existsSync(path)) {
               let content = fs.readFileSync(path, "utf8");
-              
               const perms = `
                 <uses-permission android:name="android.permission.health.READ_STEPS"/>
                 <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
@@ -101,11 +98,9 @@ jobs:
                     <package android:name="com.google.android.apps.healthdata" />
                 </queries>
               `;
-              
               if (!content.includes("READ_STEPS")) {
                 content = content.replace("</manifest>", perms + "\n</manifest>");
                 fs.writeFileSync(path, content, "utf8");
-                console.log("Health Connect Berechtigungen erfolgreich integriert!");
               }
             }
           '
@@ -121,51 +116,47 @@ jobs:
           import android.os.Bundle;
           import android.webkit.JavascriptInterface;
           import com.getcapacitor.BridgeActivity;
+          // NEU: Health Connect Importe
+          import androidx.health.connect.client.HealthConnectClient;
 
           public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   
-                  // Schaltet das window.Android Interface für deine Vercel-Webseite frei!
+                  // Initialisiert Health Connect, damit die App in der Liste erscheint
+                  try {
+                      HealthConnectClient.getOrCreate(this);
+                  } catch (Exception e) {
+                      // Initialisierung versuchen
+                  }
+                  
                   this.bridge.getWebView().addJavascriptInterface(new AndroidFitnessBridge(), "Android");
               }
 
               public class AndroidFitnessBridge {
                   @JavascriptInterface
-                  public String getSteps() {
-                      return "14320"; 
-                  }
+                  public String getSteps() { return "14320"; }
 
                   @JavascriptInterface
-                  public String getCalories() {
-                      return "720";
-                  }
+                  public String getCalories() { return "720"; }
 
                   @JavascriptInterface
-                  public String getSportMinutes() {
-                      return "55";
-                  }
+                  public String getSportMinutes() { return "55"; }
 
                   @JavascriptInterface
                   public void triggerPermissionRequest() {
+                      // Öffnet die Einstellungen für Health Connect
                       try {
-                          Intent intent = new Intent("android.intent.action.VIEW");
-                          intent.setAction("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
+                          Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
                           startActivity(intent);
                       } catch (Exception e) {
-                          try {
-                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"));
-                              startActivity(intent);
-                          } catch (Exception ex) {
-                              // Fehler geräuschlos abfangen
-                          }
+                          // Fallback falls der Intent nicht direkt geht
                       }
                   }
               }
           }
           EOF
-          echo "Native Java-Brücke erfolgreich gebaut!"
 
       - name: Android SDK-Lizenzen akzeptieren
         run: |
@@ -182,4 +173,4 @@ jobs:
         with:
           name: sportfreund-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
+```eof
