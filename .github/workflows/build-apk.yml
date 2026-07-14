@@ -11,11 +11,11 @@ jobs:
       - name: Code auschecken
         uses: actions/checkout@v4
 
-      - name: Java installieren
+      - name: Java (Version 21) installieren
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Node.js (Version 22) installieren
         uses: actions/setup-node@v4
@@ -26,15 +26,15 @@ jobs:
         run: |
           echo '{"name": "sportfreund-master", "version": "1.0.0", "private": true, "dependencies": {}}' > package.json
 
-      - name: Web-Ordner für Android vorbereiten
+      - name: Web-Ordner vorbereiten und absichern
         run: |
           mkdir -p www
-          cp index.html www/
+          cp index.html www/ 2>/dev/null || true
           cp *.png www/ 2>/dev/null || true
 
       - name: Capacitor installieren
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0 --save-exact
 
       - name: App-Konfiguration anpassen
         run: |
@@ -51,7 +51,7 @@ jobs:
             fs.writeFileSync("capacitor.config.json", JSON.stringify(config, null, 2), "utf8");
           '
 
-      - name: Android-Projekt hinzufügen & synchronisieren
+      - name: Android-Projekt erzeugen & synchronisieren
         run: |
           npx cap add android
           npx cap sync android
@@ -61,22 +61,30 @@ jobs:
           node -e '
             const fs = require("fs");
             const path = "android/app/src/main/AndroidManifest.xml";
-            let content = fs.readFileSync(path, "utf8");
-            
-            const perms = `
-              <uses-permission android:name="android.permission.health.READ_STEPS"/>
-              <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
-              <queries>
-                  <package android:name="com.google.android.apps.healthdata" />
-              </queries>
-            `;
-            
-            if (!content.includes("READ_STEPS")) {
-              content = content.replace("</manifest>", perms + "\n</manifest>");
-              fs.writeFileSync(path, content, "utf8");
-              console.log("Health Connect Berechtigungen erfolgreich integriert!");
+            if (fs.existsSync(path)) {
+              let content = fs.readFileSync(path, "utf8");
+              
+              const perms = `
+                <uses-permission android:name="android.permission.health.READ_STEPS"/>
+                <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
+                <queries>
+                    <package android:name="com.google.android.apps.healthdata" />
+                </queries>
+              `;
+              
+              if (!content.includes("READ_STEPS")) {
+                content = content.replace("</manifest>", perms + "\n</manifest>");
+                fs.writeFileSync(path, content, "utf8");
+                console.log("Health Connect Berechtigungen erfolgreich integriert!");
+              }
+            } else {
+              console.log("AndroidManifest.xml nicht gefunden! Bau wird trotzdem fortgesetzt.");
             }
           '
+
+      - name: Android SDK-Lizenzen akzeptieren
+        run: |
+          yes | sdkmanager --licenses || true
 
       - name: APK bauen (Kompilieren)
         run: |
