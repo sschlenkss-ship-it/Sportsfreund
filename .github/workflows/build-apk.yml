@@ -58,6 +58,20 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Mindest-Android-Version (minSdkVersion) auf 26 anheben
+        run: |
+          node -e '
+            const fs = require("fs");
+            const varsPath = "android/variables.gradle";
+            if (fs.existsSync(varsPath)) {
+              let vars = fs.readFileSync(varsPath, "utf8");
+              // Ersetzt minSdkVersion = 22 (oder andere) durch 26, da Health Connect Android 8+ benötigt
+              vars = vars.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 26");
+              fs.writeFileSync(varsPath, vars, "utf8");
+              console.log("minSdkVersion erfolgreich auf Android 8.0 (SDK 26) angehoben!");
+            }
+          '
+
       - name: Android-Abhängigkeiten für Health Connect hinzufügen
         run: |
           node -e '
