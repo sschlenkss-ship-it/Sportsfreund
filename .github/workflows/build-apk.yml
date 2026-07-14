@@ -17,10 +17,14 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Node.js installieren
+      - name: Node.js (Version 22) installieren
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+
+      - name: Projekt-Identität (package.json) erzeugen
+        run: |
+          echo '{"name": "sportfreund-master", "version": "1.0.0", "private": true, "dependencies": {}}' > package.json
 
       - name: Web-Ordner für Android vorbereiten
         run: |
@@ -32,7 +36,7 @@ jobs:
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
-      - name: Konfiguration anpassen
+      - name: App-Konfiguration anpassen
         run: |
           node -e '
             const fs = require("fs");
@@ -85,4 +89,3 @@ jobs:
         with:
           name: sportfreund-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
