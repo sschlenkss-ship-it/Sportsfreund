@@ -10,47 +10,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Java & Node installieren
-        uses: actions/setup-java@v4
-        with: { distribution: 'zulu', java-version: '17' }
-
-      - uses: actions/setup-node@v4
+      - name: Setup Umgebungen
+        uses: actions/setup-node@v4
         with: { node-version: 22 }
 
-      - name: Projekt setup
+      - name: Vorbereitung der Web-Struktur
+        run: |
+          mkdir -p www
+          cp index.html www/ 2>/dev/null || echo "<html><body>App</body></html>" > www/index.html
+
+      - name: Projekt setup & Capacitor Sync
         run: |
           npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0
+          npx cap init Sportfreund de.sportfreund.app --web-dir www
           npx cap add android
+          npx cap sync android
           
-      - name: Dateien injizieren
+      - name: Java Injektion (MainActivity)
         run: |
-          node -e '
-            const fs = require("fs");
-            const path = "android/app/src/main/java/de/sportfreund/app";
-            fs.mkdirSync(path, { recursive: true });
-            
-            const mainActivity = `package de.sportfreund.app;
-            import android.content.Intent;
-            import android.net.Uri;
-            import android.os.Build;
-            import android.os.Bundle;
-            import android.provider.Settings;
-            import android.webkit.JavascriptInterface;
-            import com.getcapacitor.BridgeActivity;
-            public class MainActivity extends BridgeActivity {
-                @Override
-                public void onCreate(Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                    this.bridge.getWebView().addJavascriptInterface(new Object() {
-                        @JavascriptInterface public String getSteps() { return "14320"; }
-                        @JavascriptInterface public void triggerPermissionRequest() {}
-                        @JavascriptInterface public void startFloatingWidget() {}
-                    }, "Android");
-                }
-            }`;
-            fs.writeFileSync(path + "/MainActivity.java", mainActivity);
-            console.log("Java Dateien injiziert.");
-          '
+          mkdir -p android/app/src/main/java/de/sportfreund/app
+          echo 'package de.sportfreund.app;
+          import com.getcapacitor.BridgeActivity;
+          public class MainActivity extends BridgeActivity {}' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
 
       - name: APK bauen
         run: |
