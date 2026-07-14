@@ -120,7 +120,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # MainActivity.java in purem Java (Ohne fehleranfälliges Kotlin-Plugin!)
+          # MainActivity.java in purem Java (Jetzt fehlerfrei!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
 
@@ -153,7 +153,7 @@ jobs:
                   public String getHeartRate() { return "78"; }
 
                   @JavascriptInterface
-                  fun triggerPermissionRequest() {
+                  public void triggerPermissionRequest() {
                       // Öffnet die offizielle Google Health Connect Berechtigungsseite
                       try {
                           Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
@@ -185,7 +185,7 @@ jobs:
                       stopService(intent);
                   }
 
-                  // NEU: Updatet das Bild des schwebenden Smileys in Echtzeit mit dem echten Gesicht aus dem Web!
+                  // Updatet das Bild des schwebenden Smileys in Echtzeit mit dem echten Gesicht aus dem Web!
                   @JavascriptInterface
                   public void updateWidgetImage(String imageUrl) {
                       Intent intent = new Intent(MainActivity.this, OverlayService.class);
