@@ -36,7 +36,7 @@ jobs:
         run: |
           npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0 --save-exact
 
-      - name: App-Konfiguration anpassen (Echte Vercel Live-Kopplung)
+      - name: App-Konfiguration anpassen (Echte Vercel Live-Kopplung - Ohne Schrägstrich-Fehler!)
         run: |
           node -e '
             const fs = require("fs");
@@ -45,9 +45,8 @@ jobs:
               appName: "Sportfreund Master",
               webDir: "www",
               server: {
-                url: "https://sportsfreund-bay.vercel.app/",
-                cleartext: true,
-                allowNavigation: ["*"]
+                url: "https://sportsfreund-bay.vercel.app",
+                cleartext: true
               }
             };
             fs.writeFileSync("capacitor.config.json", JSON.stringify(config, null, 2), "utf8");
@@ -65,10 +64,9 @@ jobs:
             const varsPath = "android/variables.gradle";
             if (fs.existsSync(varsPath)) {
               let vars = fs.readFileSync(varsPath, "utf8");
-              // Ersetzt minSdkVersion = 22 (oder andere) durch 26, da Health Connect Android 8+ benötigt
               vars = vars.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 26");
               fs.writeFileSync(varsPath, vars, "utf8");
-              console.log("minSdkVersion erfolgreich auf Android 8.0 (SDK 26) angehoben!");
+              console.log("minSdkVersion erfolgreich angehoben!");
             }
           '
 
