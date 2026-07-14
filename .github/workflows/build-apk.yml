@@ -11,11 +11,11 @@ jobs:
       - name: Code auschecken
         uses: actions/checkout@v4
 
-      - name: Java (Version 17) installieren
+      - name: Java (Version 21) installieren
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Node.js (Version 22) installieren
         uses: actions/setup-node@v4
@@ -119,10 +119,9 @@ jobs:
                   this.bridge.getWebView().addJavascriptInterface(new AndroidFitnessBridge(), "Android");
               }
 
-              class AndroidFitnessBridge {
+              public class AndroidFitnessBridge {
                   @JavascriptInterface
                   public String getSteps() {
-                      // Hier wird die echte Schnittstelle zu Health Connect bedient
                       return "14320"; 
                   }
 
