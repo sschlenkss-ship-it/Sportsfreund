@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sportfreund Master</title>
+    <style>
+        :root { --gold: #FFD700; --bg: #030303; }
+        body { background-color: var(--bg); color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
+        
+        .view { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; align-items: center; justify-content: center; flex-direction: column; }
+        
+        #smiley-display { width: 200px; height: 200px; cursor: pointer; filter: url(#main-glow); transition: 0.3s; }
+        
+        #view-ranking { background: #0a0a0a; justify-content: flex-start; padding-top: 70px; overflow-y: auto; }
+        .header-row { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #0a0a0a; border-bottom: 1px solid #333; z-index: 10; }
+        
+        table { width: 95%; border-collapse: separate; border-spacing: 0 10px; margin-top: 10px; }
+        td { background: #161616; padding: 10px; text-align: center; border-bottom: 2px solid #222; }
+        .sm-icon { width: 40px; height: 40px; border-radius: 50%; display: block; margin: 0 auto; }
+        
+        button { background: var(--gold); color: #000; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.2s; }
+        button:hover { filter: brightness(1.2); }
+        
+        #view-settings { background: rgba(0,0,0,0.95); z-index: 100; overflow-y: auto; padding-top: 10px; padding-bottom: 20px; }
+        
+        #view-settings .box { 
+            width: 90%; 
+            max-width: 380px; 
+            background: #161616; 
+            padding: 12px 18px; 
+            border-radius: 16px; 
+            text-align: center; 
+            box-sizing: border-box; 
+        }
+        #view-settings h1 { font-size: 1.25rem; margin: 4px 0 12px 0; }
+        #view-settings .input-group { margin: 4px 0; text-align: left; }
+        #view-settings .input-group label { display: block; font-size: 0.75rem; color: #aaa; margin-bottom: 2px; }
+        #view-settings .text-input { background: #222; border: 1px solid #444; color: white; padding: 6px 10px; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 0.85rem; }
+        #view-settings .number-input { background: #222; border: 1px solid #444; color: white; padding: 4px; border-radius: 6px; width: 60px; text-align: center; font-size: 0.8rem; }
+        #view-settings .sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px; text-align: left; }
+        
+        footer { margin-top: 15px; font-size: 0.65rem; color: #668; }
+
+        .top-info-row { display: flex; justify-content: center; gap: 15px; font-size: 0.75rem; color: #888; margin-bottom: 10px; }
+        .top-info-row span { cursor: pointer; text-decoration: underline; }
+        .top-info-row span:hover { color: var(--gold); }
+
+        body.widget-active { background: transparent !important; }
+        body.widget-active .view { display: none !important; }
+        body.widget-active #widget-container { display: flex !important; }
+
+        #widget-container {
+            display: none;
+            position: fixed;
+            top: 100px;
+            left: 100px;
+            width: 220px;
+            height: 220px;
+            z-index: 999999;
+            cursor: move;
+            touch-action: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #widget-close-btn {
+            background: rgba(0, 0, 0, 0.8);
+            color: var(--gold);
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            margin-top: 8px;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        
+        .sleep-row-inline { display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin-top: 4px; }
+        .sleep-label-inline { font-size: 0.8rem; color: #ccc; }
+        .time-input-inline { background: #222; border: 1px solid #444; color: white; padding: 4px 6px; border-radius: 6px; font-size: 0.8rem; width: 75px; text-align: center; box-sizing: border-box; }
+
+        #custom-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.8);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        #custom-modal .modal-content {
+            background: #161616;
+            padding: 20px;
+            border-radius: 20px;
+            max-width: 300px;
+            width: 80%;
+            text-align: center;
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+
+<svg width="0" height="0">
+    <defs>
+        <filter id="main-glow">
+            <feMorphology in="SourceAlpha" operator="dilate" radius="8" result="dilated"/>
+            <feFlood id="glow-flood" flood-color="#FFD700"/>
+            <feComposite in2="dilated" operator="in"/>
+            <feGaussianBlur stdDeviation="8"/>
+            <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+    </defs>
+</svg>
+
+<!-- VIEW 1: DASHBOARD -->
+<div id="view-smiley" class="view" style="display: flex;">
+    <img src="Smiley4.png" id="smiley-display" ondblclick="showView('view-ranking')">
+</div>
+
+<!-- VIEW 2: RANKING -->
+<div id="view-ranking" class="view">
+    <div class="header-row">
+        <button onclick="showView('view-smiley')">Zur&uuml;ck</button>
+        <span style="font-size: 28px; cursor: pointer;" onclick="showView('view-settings')">&#9881;</span>
+    </div>
+    <h1>Freunde-Ranking</h1>
+    <table id="friends-table">
+        <thead>
+            <tr><th>Status</th><th>Name</th><th>Schritte</th><th>kcal</th><th>Min.</th><th>Punkte</th></tr>
+        </thead>
+        <tbody id="friends-tbody">
+            <!-- Dynamisch befüllt -->
+        </tbody>
+    </table>
+</div>
+
+<!-- VIEW 3: SETTINGS -->
+<div id="view-settings" class="view">
+    <div class="box">
+        <div class="header-row" style="position: relative; margin-bottom: 12px; background: transparent; border-bottom: none; padding: 0; display: flex; justify-content: center; align-items: center; width: 100%;">
+            <button onclick="showView('view-smiley')" style="position: absolute; left: 0; background: var(--gold); color: #000; border: none; padding: 5px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">Zur&uuml;ck</button>
+            <span style="color: #fff; font-weight: bold; font-size: 1.1rem; text-align: center;">Einstellungen</span>
+        </div>
+
+        <div class="top-info-row">
+            <span onclick="openModal('Impressum', 'Sportfreund Master App<br>Support: info@sportfreund.de')">Impressum</span>
+            <span>|</span>
+            <span onclick="openModal('Datenschutz', 'Deine Fitnessdaten verbleiben in deiner persönlichen Cloud-Datenbank und werden nur mit hinzugefügten Freunden geteilt.')">Datenschutz</span>
+        </div>
+        
+        <div class="input-group" style="margin-top: 0;">
+            <label>Dein Anzeigename:</label>
+            <input type="text" id="username-input" class="text-input" value="Sportfreund" onchange="saveProfileData()">
+        </div>
+
+        <div style="border-top: 1px solid #333; margin: 6px 0; padding-top: 4px; text-align: left;">
+            <label style="font-size: 0.75rem; color: #aaa; margin-bottom: 2px; display: block;">Schlafenszeit:</label>
+            <div class="sleep-row-inline">
+                <span class="sleep-label-inline">von</span>
+                <input type="time" id="s-start" class="time-input-inline" value="23:00" onchange="saveProfileData()">
+                <span class="sleep-label-inline">bis</span>
+                <input type="time" id="s-end" class="time-input-inline" value="07:00" onchange="saveProfileData()">
+            </div>
+        </div>
+
+        <!-- Google Health Connect & Simulator Sektion -->
+        <div style="border-top: 1px solid #333; margin: 6px 0; padding-top: 4px;">
+            <h3 style="margin: 0 0 2px 0; font-size: 0.85rem; color: var(--gold);">Google Health Connect</h3>
+            <button onclick="connectGoogleHealthManual()" style="width: 100%; margin-top: 2px; padding: 5px 10px; font-size: 0.8rem; background: var(--gold); color: black;">Mit Google verbinden</button>
+            
+            <div id="simulator-controls" class="sim-grid">
+                <div>
+                    <label style="font-size: 0.65rem;">Sim. Schritte:</label><br>
+                    <input type="number" id="sim-steps" class="number-input" value="12500" onchange="updateSimStats()">
+                </div>
+                <div>
+                    <label style="font-size: 0.65rem;">Sim. Kalorien:</label><br>
+                    <input type="number" id="sim-kcal" class="number-input" value="650" onchange="updateSimStats()">
+                </div>
+                <div>
+                    <label style="font-size: 0.65rem;">Sim. Sportminuten:</label><br>
+                    <input type="number" id="sim-min" class="number-input" value="45" onchange="updateSimStats()">
+                </div>
+                <div>
+                    <label style="font-size: 0.65rem;">Sim. Puls (Hintergrund):</label><br>
+                    <input type="number" id="sim-heart" class="number-input" value="72" onchange="updateSimStats()">
+                </div>
+            </div>
+            <p id="h-connect-status" style="font-size: 0.7rem; color: #888; margin: 2px 0 0 0;">Simulator-Modus aktiv.</p>
+        </div>
+
+        <!-- Schwebender Smiley Bereich -->
+        <div style="border-top: 1px solid #333; margin: 6px 0; padding-top: 4px; text-align: left;">
+            <h3 style="margin: 0 0 4px 0; font-size: 0.85rem; color: var(--gold);">Echter Schwebender Smiley</h3>
+            <button onclick="triggerFloatingWidget(true)" style="width: 100%; background: #222; color: #fff; margin-bottom: 6px; padding: 5px 10px; font-size: 0.8rem; border: 1px solid #333; border-radius: 12px;">Schwebenden Smiley starten</button>
+            <button onclick="triggerFloatingWidget(false)" style="width: 100%; background: #bd2130; color: #fff; margin-bottom: 6px; padding: 5px 10px; font-size: 0.8rem; border: none; border-radius: 12px;">Schwebenden Smiley stoppen</button>
+            
+            <div class="input-group" style="margin: 2px 0;">
+                <label style="font-size: 0.7rem; color: #aaa;">Deine Teilen-ID:</label>
+                <div style="display: flex; gap: 5px; margin-bottom: 6px;">
+                    <input type="text" id="my-share-id" class="text-input" style="font-size: 0.75rem; padding: 4px 8px;" readonly>
+                    <button onclick="copyMyID()" style="padding: 4px 8px; font-size: 0.75rem; white-space: nowrap; border-radius: 8px;">Kopieren</button>
+                </div>
+            </div>
+
+            <div class="input-group" style="margin: 2px 0;">
+                <label style="font-size: 0.7rem; color: #aaa;">Freund hinzufügen (ID eingeben):</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="friend-id-input" class="text-input" style="padding: 4px 8px; font-size: 0.8rem;" placeholder="ID einfügen...">
+                    <button onclick="addNewFriend()" style="padding: 4px 8px; font-size: 0.75rem; white-space: nowrap; border-radius: 8px;">Hinzufügen</button>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="showView('view-smiley')" style="margin-top: 10px; width: 100%; padding: 8px 12px; font-size: 0.85rem; border-radius: 14px;">Zur&uuml;ck zum Hauptbildschirm</button>
+    </div>
+</div>
+
+<div id="widget-container">
+    <img src="Smiley4.png" id="widget-smiley" style="width: 140px; height: 140px; filter: drop-shadow(0 0 15px var(--gold));">
+    <button id="widget-close-btn" onclick="exitWidgetMode()">Zurück zur App</button>
+</div>
+
+<div id="custom-modal">
+    <div class="modal-content">
+        <h3 id="modal-title" style="color: var(--gold); margin-top: 0;">Info</h3>
+        <p id="modal-text" style="font-size: 0.9rem; line-height: 1.4; color: #ddd;"></p>
+        <button onclick="closeModal()" style="margin-top: 15px;">Schließen</button>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const statusColors = ["#FF0000", "#FF4500", "#FF8C00", "#EEDD00", "#32CD32", "#00FF00", "#00DFFF", "#FFD700"];
+    const sleepColor = "#1D3557"; 
+    window.statusColors = statusColors;
+
+    let dbReady = false;
+    let currentUser = null;
+    let db, auth;
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAAEOEYlK0bOrOkuLNUkpGNCO6yLUa4RWs",
+      authDomain: "sportsfreund-8105a.firebaseapp.com",
+      projectId: "sportsfreund-8105a",
+      storageBucket: "sportsfreund-8105a.firebasestorage.app",
+      messagingSenderId: "592923555541",
+      appId: "1:592923555541:web:486bfd9ea2ca152e25d45c"
+    };
+
+    const appId = 'sportfreund-master';
+
+    let myLocalFitnessData = {
+        name: "Sportfreund",
+        steps: 12500,
+        kcal: 650,
+        sportMin: 45,
+        heartRate: 72,
+        sleepStart: "23:00",
+        sleepEnd: "07:00",
+        friendsList: []
+    };
+    let rankingData = [];
+
+    const dummyFriends = [
+        { id: "dummy1", name: "Max", steps: 15200, kcal: 850, sportMin: 60, heartRate: 75, sleepStart: "23:00", sleepEnd: "07:00" },
+        { id: "dummy2", name: "Anna", steps: 5000, kcal: 600, sportMin: 120, heartRate: 68, sleepStart: "22:00", sleepEnd: "06:00" },
+        { id: "dummy3", name: "Tim", steps: 3000, kcal: 200, sportMin: 0, heartRate: 65, sleepStart: "23:30", sleepEnd: "08:00" }
+    ];
+
+    function generateFallbackID() {
+        let storedId = localStorage.getItem('sportfreund_fallback_id');
+        if (!storedId) {
+            storedId = "SF-" + Math.floor(100000 + Math.random() * 900000);
+            localStorage.setItem('sportfreund_fallback_id', storedId);
+        }
+        return storedId;
+    }
+
+    document.getElementById('my-share-id').value = generateFallbackID();
+
+    try {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        dbReady = true;
+
+        const initAuth = async () => {
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.warn("Auth-Fehler. Lokaler ID-Modus aktiv.", error);
+                renderRankingTable();
+            }
+        };
+
+        initAuth();
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById('my-share-id').value = user.uid;
+                loadUserData();
+                listenToRanking();
+            } else {
+                renderRankingTable();
+            }
+        });
+    } catch (e) {
+        console.warn("Offline-Modus aktiv.", e);
+        dbReady = false;
+        setTimeout(() => {
+            renderRankingTable();
+            updateMainSmiley();
+        }, 100);
+    }
+
+    function isSleepTime(startStr, endStr) {
+        if (!startStr || !endStr) return false;
+        const now = new Date();
+        const currentMin = now.getHours() * 60 + now.getMinutes();
+        const [startHours, startMins] = startStr.split(':').map(Number);
+        const [endHours, endMins] = endStr.split(':').map(Number);
+        const startMin = startHours * 60 + startMins;
+        const endMin = endHours * 60 + endMins;
+        if (startMin > endMin) { return currentMin >= startMin || currentMin <= endMin; } 
+        else { return currentMin >= startMin && currentMin <= endMin; }
+    }
+
+    async function loadUserData() {
+        if (!dbReady || !currentUser) return;
+        try {
+            const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+            const userSnap = await getDoc(userDocRef);
+            if (userSnap.exists()) {
+                myLocalFitnessData = userSnap.data();
+                if (!myLocalFitnessData.friendsList) myLocalFitnessData.friendsList = [];
+                document.getElementById('username-input').value = myLocalFitnessData.name || "Sportfreund";
+                if (myLocalFitnessData.sleepStart) document.getElementById('s-start').value = myLocalFitnessData.sleepStart;
+                if (myLocalFitnessData.sleepEnd) document.getElementById('s-end').value = myLocalFitnessData.sleepEnd;
+                document.getElementById('sim-steps').value = myLocalFitnessData.steps;
+                document.getElementById('sim-kcal').value = myLocalFitnessData.kcal;
+                document.getElementById('sim-min').value = myLocalFitnessData.sportMin;
+                document.getElementById('sim-heart').value = myLocalFitnessData.heartRate || 72;
+            } else {
+                myLocalFitnessData.name = "Sportfreund";
+                await saveFitnessDataToCloud();
+            }
+        } catch (e) { console.error(e); }
+        updateMainSmiley();
+        silentCheckGoogleConnection();
+    }
+
+    function silentCheckGoogleConnection() {
+        if (window.Android && typeof window.Android.getSteps !== 'undefined') {
+            document.getElementById('simulator-controls').style.display = 'none';
+            document.getElementById('h-connect-status').innerHTML = "🟢 Mit Google Health Connect verbunden";
+            document.getElementById('h-connect-status').style.color = "#32CD32";
+            
+            try {
+                myLocalFitnessData.steps = parseInt(window.Android.getSteps()) || 0;
+                myLocalFitnessData.kcal = parseInt(window.Android.getCalories()) || 0;
+                myLocalFitnessData.sportMin = parseInt(window.Android.getSportMinutes()) || 0;
+                if (typeof window.Android.getHeartRate === 'function') {
+                    myLocalFitnessData.heartRate = parseInt(window.Android.getHeartRate()) || 72;
+                }
+            } catch (err) {
+                console.warn("Fehler beim lautlosen Auslesen der Daten", err);
+            }
+        }
+    }
+    window.checkAndroidHoleConnection = silentCheckGoogleConnection;
+
+    window.connectGoogleHealthManual = async function() {
+        silentCheckGoogleConnection();
+
+        if (window.Android && typeof window.Android.triggerPermissionRequest === 'function') {
+            window.Android.triggerPermissionRequest();
+        }
+
+        if (!(window.Android && typeof window.Android.getSteps === 'function')) {
+            const targetSteps = parseInt(document.getElementById('sim-steps').value) || 0;
+            const targetKcal = parseInt(document.getElementById('sim-kcal').value) || 0;
+            const targetMin = parseInt(document.getElementById('sim-min').value) || 0;
+            const targetHeart = parseInt(document.getElementById('sim-heart').value) || 72;
+
+            myLocalFitnessData.steps = targetSteps;
+            myLocalFitnessData.kcal = targetKcal;
+            myLocalFitnessData.sportMin = targetMin;
+            myLocalFitnessData.heartRate = targetHeart;
+        }
+
+        if (dbReady && currentUser) { 
+            await saveFitnessDataToCloud(); 
+        } else { 
+            updateMainSmiley(); 
+            renderRankingTable(); 
+        }
+        openModal("Abgleich", "Datenabgleich angestoßen. Google Health Connect wird geöffnet, um Berechtigungen freizugeben.");
+    };
+
+    window.syncTrackerData = function() {
+        silentCheckGoogleConnection();
+        if (dbReady && currentUser) {
+            saveFitnessDataToCloud();
+        }
+    };
+
+    window.updateSimStats = function() {
+        myLocalFitnessData.sleepStart = document.getElementById('s-start').value;
+        myLocalFitnessData.sleepEnd = document.getElementById('s-end').value;
+    };
+
+    window.saveProfileData = async function() {
+        myLocalFitnessData.name = document.getElementById('username-input').value.trim() || "Sportfreund";
+        myLocalFitnessData.sleepStart = document.getElementById('s-start').value;
+        myLocalFitnessData.sleepEnd = document.getElementById('s-end').value;
+        if (dbReady && currentUser) { await saveFitnessDataToCloud(); } 
+        else { updateMainSmiley(); renderRankingTable(); }
+    };
+
+    async function saveFitnessDataToCloud() {
+        if (!dbReady || !currentUser) return;
+        try {
+            const privateRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'data');
+            await setDoc(privateRef, myLocalFitnessData);
+            const publicRef = doc(db, 'artifacts', appId, 'public', 'data', 'ranking', currentUser.uid);
+            await setDoc(publicRef, {
+                name: myLocalFitnessData.name,
+                steps: myLocalFitnessData.steps,
+                kcal: myLocalFitnessData.kcal,
+                sportMin: myLocalFitnessData.sportMin,
+                heartRate: myLocalFitnessData.heartRate || 72,
+                sleepStart: myLocalFitnessData.sleepStart || "23:00",
+                sleepEnd: myLocalFitnessData.sleepEnd || "07:00",
+                updatedAt: Date.now()
+            });
+        } catch (e) { console.error(e); }
+        updateMainSmiley();
+    }
+
+    window.addNewFriend = async function() {
+        const friendId = document.getElementById('friend-id-input').value.trim();
+        if (!friendId) { openModal("Fehler", "Bitte gib eine gültige ID ein."); return; }
+        if (currentUser && friendId === currentUser.uid) { openModal("Fehler", "Du kannst dich nicht selbst hinzufügen."); return; }
+        if (!myLocalFitnessData.friendsList) { myLocalFitnessData.friendsList = []; }
+        if (myLocalFitnessData.friendsList.includes(friendId)) { openModal("Info", "Bereits hinzugefügt."); return; }
+
+        myLocalFitnessData.friendsList.push(friendId);
+        document.getElementById('friend-id-input').value = "";
+        if (dbReady && currentUser) { await saveFitnessDataToCloud(); openModal("Erfolg", "Freund erfolgreich verknüpft!"); } 
+        else { renderRankingTable(); openModal("Erfolg", "Freund lokal hinzugefügt!"); }
+    };
+
+    function listenToRanking() {
+        if (!dbReady || !currentUser) return;
+        const rankingCollection = collection(db, 'artifacts', appId, 'public', 'data', 'ranking');
+        onSnapshot(rankingCollection, (snapshot) => {
+            rankingData = [];
+            snapshot.forEach((doc) => { rankingData.push({ id: doc.id, ...doc.data() }); });
+            renderRankingTable();
+        }, (error) => { renderRankingTable(); });
+    }
+
+    function renderRankingTable() {
+        const tbody = document.getElementById('friends-tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        let finalDisplayList = [];
+        const myId = currentUser ? currentUser.uid : "localUser";
+
+        finalDisplayList.push({
+            id: myId, name: myLocalFitnessData.name, steps: myLocalFitnessData.steps,
+            kcal: myLocalFitnessData.kcal, sportMin: myLocalFitnessData.sportMin, heartRate: myLocalFitnessData.heartRate || 72,
+            sleepStart: myLocalFitnessData.sleepStart, sleepEnd: myLocalFitnessData.sleepEnd
+        });
+
+        let friendsCount = 0;
+        if (myLocalFitnessData.friendsList && myLocalFitnessData.friendsList.length > 0) {
+            rankingData.forEach(user => {
+                if (myLocalFitnessData.friendsList.includes(user.id)) { finalDisplayList.push(user); friendsCount++; }
+            });
+        }
+        if (friendsCount === 0) {
+            dummyFriends.forEach(d => { if (!finalDisplayList.some(user => user.name === d.name)) { finalDisplayList.push(d); } });
+        }
+
+        const scoredList = finalDisplayList.map(f => {
+            let currentSteps = f.steps || 0;
+            let currentKcal = f.kcal || Math.floor(currentSteps * 0.04);
+            let currentSportMin = f.sportMin || Math.floor(currentSteps / 120);
+            let currentHeart = f.heartRate || 72;
+
+            let basePts = Math.floor(currentSteps / 100); 
+            let heartBonus = currentHeart > 75 ? Math.floor((currentHeart - 75) * 0.2) : 0;
+            let bonusPts = Math.floor((currentKcal * 0.05) + (currentSportMin * 1.0)) + heartBonus; 
+            let pts = basePts + bonusPts;
+
+            let lvl = Math.min(8, Math.max(1, Math.floor(pts / 12.5) + 1));
+            let sleeping = isSleepTime(f.sleepStart, f.sleepEnd);
+            return { ...f, steps: currentSteps, kcal: currentKcal, sportMin: currentSportMin, heartRate: currentHeart, pts, lvl, sleeping };
+        });
+
+        scoredList.sort((a, b) => b.pts - a.pts);
+
+        scoredList.forEach(f => {
+            const isMe = f.id === myId;
+            const highlightClass = isMe ? 'class="me-row"' : '';
+            let smileyImgFile = f.sleeping ? 'Smiley0.png' : `Smiley${9-f.lvl}.png`;
+            let shadowColor = f.sleeping ? sleepColor : statusColors[f.lvl-1];
+            
+            tbody.innerHTML += `
+                <tr ${highlightClass}>
+                    <td><img src="${smileyImgFile}" class="sm-icon" style="filter: drop-shadow(0 0 5px ${shadowColor})" onerror="this.src='https://via.placeholder.com/40/222/fff?text=S'"></td>
+                    <td style="font-weight: ${isMe ? 'bold' : 'normal'}">${f.name} ${f.sleeping ? ' 💤' : ''}</td>
+                    <td>${f.steps.toLocaleString()}</td>
+                    <td>${f.kcal}</td>
+                    <td>${f.sportMin}</td>
+                    <td style="color:${shadowColor}; font-weight:bold">${f.pts}</td>
+                </tr>`;
+        });
+    }
+
+    function updateMainSmiley() {
+        const sleepActive = isSleepTime(myLocalFitnessData.sleepStart, myLocalFitnessData.sleepEnd);
+        const mainSmileyImg = document.getElementById('smiley-display');
+        const widgetSmileyImg = document.getElementById('widget-smiley');
+        if (!mainSmileyImg) return;
+        
+        let targetSrc = ""; let targetColor = "";
+        if (sleepActive) { targetSrc = 'Smiley0.png'; targetColor = sleepColor; } 
+        else {
+            let currentSteps = myLocalFitnessData.steps || 0;
+            let currentKcal = myLocalFitnessData.kcal || Math.floor(currentSteps * 0.04);
+            let currentSportMin = myLocalFitnessData.sportMin || Math.floor(currentSteps / 120);
+
+            let basePts = Math.floor(currentSteps / 100);
+            let bonusPts = Math.floor((currentKcal * 0.05) + (currentSportMin * 1.0));
+            let pts = basePts + bonusPts;
+
+            let lvl = Math.min(8, Math.max(1, Math.floor(pts / 12.5) + 1));
+            targetSrc = `Smiley${9-lvl}.png`; targetColor = statusColors[lvl-1];
+        }
+        mainSmileyImg.src = targetSrc;
+        mainSmileyImg.style.filter = `drop-shadow(0 0 25px ${targetColor})`;
+        if (widgetSmileyImg) { widgetSmileyImg.src = targetSrc; widgetSmileyImg.style.filter = `drop-shadow(0 0 15px ${targetColor})`; }
+        const glowFlood = document.getElementById('glow-flood');
+        if (glowFlood) { glowFlood.setAttribute('flood-color', targetColor); }
+    }
+    window.updateMainSmiley = updateMainSmiley;
+
+    setInterval(() => { silentCheckGoogleConnection(); }, 5000);
+</script>
+
+<script>
+    // Löst das echte schwebende Widget über anderen Apps über das Android-System aus
+    function triggerFloatingWidget(enable) {
+        if (window.Android) {
+            if (enable && typeof window.Android.startFloatingWidget === 'function') {
+                window.Android.startFloatingWidget();
+                openModal("Widget gestartet", "Der Smiley schwebt jetzt frei über deinen anderen Apps! Tippe ihn an, um die App wieder zu öffnen.");
+            } else if (!enable && typeof window.Android.stopFloatingWidget === 'function') {
+                window.Android.stopFloatingWidget();
+                openModal("Widget gestoppt", "Der schwebende Smiley wurde erfolgreich beendet.");
+            } else {
+                openModal("Fehler", "Schnittstelle nicht bereit. Bitte installiere die neueste APK!");
+            }
+        } else {
+            // Simulator Modus für den Browser
+            if (enable) {
+                enterWidgetMode();
+            } else {
+                exitWidgetMode();
+            }
+        }
+    }
+    window.triggerFloatingWidget = triggerFloatingWidget;
+
+    function showView(id) {
+        document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
+        document.getElementById(id).style.display = 'flex';
+        if (id === 'view-smiley' && typeof window.updateMainSmiley === 'function') { window.updateMainSmiley(); }
+    }
+
+    function openModal(title, text) {
+        document.getElementById('modal-title').innerHTML = title;
+        document.getElementById('modal-text').innerHTML = text;
+        document.getElementById('custom-modal').style.display = 'flex';
+    }
+    function closeModal() { document.getElementById('custom-modal').style.display = 'none'; }
+
+    function copyMyID() {
+        const idField = document.getElementById('my-share-id');
+        idField.select(); idField.setSelectionRange(0, 99999);
+        try {
+            document.execCommand('copy');
+            openModal("Kopiert!", "Deine ID wurde kopiert. Sende sie an deine Freunde!");
+        } catch (err) { openModal("Teilen-ID", "Markiere die ID manuell: <br><b>" + idField.value + "</b>"); }
+    }
+
+    function enterWidgetMode() { document.body.classList.add('widget-active'); if (typeof window.updateMainSmiley === 'function') { window.updateMainSmiley(); } }
+    function exitWidgetMode() { document.body.classList.remove('widget-active'); }
+
+    const widget = document.getElementById('widget-container');
+    let isDragging = false; let currentX; let currentY; let initialX; let initialY; let xOffset = 100; let yOffset = 100;
+
+    widget.addEventListener("touchstart", dragStart, false);
+    widget.addEventListener("touchend", dragEnd, false);
+    widget.addEventListener("touchmove", drag, false);
+    widget.addEventListener("mousedown", dragStart, false);
+    widget.addEventListener("mouseup", dragEnd, false);
+    widget.addEventListener("mousemove", drag, false);
+
+    function dragStart(e) {
+        if (e.type === "touchstart") { initialX = e.touches[0].clientX - xOffset; initialY = e.touches[0].clientY - yOffset; } 
+        else { initialX = e.clientX - xOffset; initialY = e.clientY - yOffset; }
+        if (e.target === widget || widget.contains(e.target)) { isDragging = true; }
+    }
+    function dragEnd(e) { initialX = currentX; initialY = currentY; isDragging = false; }
+    function drag(e) {
+        if (isDragging) {
+            e.preventDefault();
+            if (e.type === "touchmove") { currentX = e.touches[0].clientX - initialX; currentY = e.touches[0].clientY - initialY; } 
+            else { currentX = e.clientX - initialX; currentY = e.clientY - initialY; }
+            xOffset = currentX; yOffset = currentY; setTranslate(currentX, currentY, widget);
+        }
+    }
+    function setTranslate(xPos, yPic, el) { el.style.left = xPos + "px"; el.style.top = yPic + "px"; }
+</script>
+</body>
+</html>
