@@ -17,74 +17,96 @@ jobs:
       - name: Projekt vorbereiten
         run: |
           mkdir -p www
-          if [ ! -f index.html ]; then echo "<html><body>App</body></html>" > index.html; fi
-          cp index.html www/
+          # Sicherstellen, dass index.html kopiert wird
+          if [ -f index.html ]; then cp index.html www/; else echo "<html><body>Error</body></html>" > www/index.html; fi
+          # Kopiere eventuell vorhandene Smileys
+          cp Smiley*.png www/ 2>/dev/null || true
+          
           npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0
           npx cap init Sportfreund de.sportfreund.app --web-dir www
           npx cap add android
 
-      - name: Android System & Java injizieren
+      - name: Dual-Android System & Java-Brücken injizieren
         run: |
           node -e '
             const fs = require("fs");
-            
-            // --- NEU: Mindestversion auf 26 anheben für Health Connect! ---
+
+            // 1. minSdkVersion auf 26 anheben (Zwingend für Google Health Connect!)
             const varsPath = "android/variables.gradle";
             if (fs.existsSync(varsPath)) {
                 let vars = fs.readFileSync(varsPath, "utf8");
                 vars = vars.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 26");
-                fs.writeFileSync(varsPath, vars);
+                fs.writeFileSync(varsPath, vars, "utf8");
+                console.log("minSdkVersion erfolgreich auf 26 angehoben!");
             }
 
-            // 1. Gradle für Health Connect updaten
+            // 2. Health Connect Client-Bibliothek in Gradle eintragen
             const gradlePath = "android/app/build.gradle";
-            let gradle = fs.readFileSync(gradlePath, "utf8");
-            if (!gradle.includes("connect-client")) {
-                gradle = gradle.replace("dependencies {", "dependencies {\n    implementation \"androidx.health.connect:connect-client:1.1.0-alpha07\"");
-                fs.writeFileSync(gradlePath, gradle);
+            if (fs.existsSync(gradlePath)) {
+                let gradle = fs.readFileSync(gradlePath, "utf8");
+                if (!gradle.includes("connect-client")) {
+                    gradle = gradle.replace("dependencies {", "dependencies {\n    implementation \"androidx.health.connect:connect-client:1.1.0-alpha07\"");
+                    fs.writeFileSync(gradlePath, gradle, "utf8");
+                    console.log("Health Connect Dependency erfolgreich hinzugefügt!");
+                }
             }
 
-            // 2. Android Manifest komplett patchen (Alle Android Versionen)
+            // 3. AndroidManifest.xml für Dual-System (Android 13 & 14+) patchen
             const manifestPath = "android/app/src/main/AndroidManifest.xml";
-            let xml = fs.readFileSync(manifestPath, "utf8");
-            
-            // Alte fehlerhafte Tags bereinigen
-            xml = xml.replace(/<uses-permission.*?\/>/g, "");
-            xml = xml.replace(/<queries>.*?<\/queries>/gs, "");
-            xml = xml.replace(/<meta-data android:name="androidx\.health\.connect.*?\/>/g, "");
-            
-            const permissions = `
-            <uses-permission android:name="android.permission.INTERNET" />
-            <uses-permission android:name="android.permission.health.READ_STEPS"/>
-            <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
-            <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
-            <uses-permission android:name="androidx.health.permission.Steps.READ"/>
-            <uses-permission android:name="androidx.health.permission.ActiveCaloriesBurned.READ"/>
-            <uses-permission android:name="androidx.health.permission.HeartRate.READ"/>
-            <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-            <queries><package android:name="com.google.android.apps.healthdata" /></queries>`;
-            
-            xml = xml.replace("<application", permissions + "\n    <application");
-            
-            const rationale = `
+            if (fs.existsSync(manifestPath)) {
+                let xml = fs.readFileSync(manifestPath, "utf8");
+                
+                // Alte Berechtigungen und Queries säubern
+                xml = xml.replace(/<uses-permission.*?\/>/g, "");
+                xml = xml.replace(/<queries>.*?<\/queries>/gs, "");
+                xml = xml.replace(/<meta-data android:name="androidx\.health\.connect.*?\/>/g, "");
+
+                const permissionsAndQueries = `
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="androidx.health.permission.Steps.READ" />
+    <uses-permission android:name="androidx.health.permission.ActiveCaloriesBurned.READ" />
+    <uses-permission android:name="androidx.health.permission.HeartRate.READ" />
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+                `;
+
+                // Injektion vor dem application Tag
+                xml = xml.replace("<application", permissionsAndQueries + "\n    <application");
+
+                // Google Rationale Filter in die MainActivity einfügen (MUSS vorhanden sein!)
+                const rationaleFilter = `
             <intent-filter>
                 <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
-            </intent-filter>`;
-            if (!xml.includes("SHOW_PERMISSIONS_RATIONALE")) {
-                xml = xml.replace("</activity>", rationale + "\n        </activity>");
-            }
-            
-            const serviceAndMeta = `
-            <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
-            <meta-data android:name="androidx.health.connect.DETAILS_INTENT_FILTER_ACTION" android:value="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />`;
-            if (!xml.includes("OverlayService")) {
-                xml = xml.replace("</application>", serviceAndMeta + "\n    </application>");
-            }
-            fs.writeFileSync(manifestPath, xml);
+            </intent-filter>
+                `;
+                xml = xml.replace("</activity>", rationaleFilter + "\n        </activity>");
 
-            // 3. MainActivity mit Fallbacks schreiben
+                // Service & Google Health Connect Meta-Daten registrieren
+                const applicationInjections = `
+        <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
+        <meta-data android:name="androidx.health.connect.DETAILS_INTENT_FILTER_ACTION" android:value="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
+        <meta-data android:name="androidx.health.connect.CLIENT_CONFIG" android:resource="@xml/health_connect_client_config" />
+                `;
+                xml = xml.replace("</application>", applicationInjections + "\n    </application>");
+
+                fs.writeFileSync(manifestPath, xml, "utf8");
+                console.log("AndroidManifest.xml erfolgreich für alle Android-Versionen gepatcht!");
+            }
+
+            // 4. Google Health Connect XML-Config-Datei erzeugen
+            fs.mkdirSync("android/app/src/main/res/xml", { recursive: true });
+            fs.writeFileSync("android/app/src/main/res/xml/health_connect_client_config.xml", 
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<health-connect-client-config />", "utf8");
+            console.log("health_connect_client_config.xml erfolgreich erstellt!");
+
+            // 5. MainActivity.java mit Dual-Trigger schreiben
             fs.mkdirSync("android/app/src/main/java/de/sportfreund/app", { recursive: true });
-            const mainActivity = `package de.sportfreund.app;
+            const mainActivityJava = `package de.sportfreund.app;
             import android.content.Intent;
             import android.net.Uri;
             import android.os.Build;
@@ -164,10 +186,11 @@ jobs:
                     }
                 }
             }`;
-            fs.writeFileSync("android/app/src/main/java/de/sportfreund/app/MainActivity.java", mainActivity);
+            fs.writeFileSync("android/app/src/main/java/de/sportfreund/app/MainActivity.java", mainActivityJava, "utf8");
+            console.log("MainActivity.java erfolgreich injiziert!");
 
-            // 4. OverlayService schreiben (Großer Smiley 280x280)
-            const overlayService = `package de.sportfreund.app;
+            // 6. OverlayService.java (Riesiger Smiley 280x280 mit weichem Glüh-Schein)
+            const overlayServiceJava = `package de.sportfreund.app;
             import android.app.Service;
             import android.content.Intent;
             import android.graphics.Bitmap;
@@ -284,18 +307,18 @@ jobs:
                     if (containerLayout != null) windowManager.removeView(containerLayout);
                 }
             }`;
-            fs.writeFileSync("android/app/src/main/java/de/sportfreund/app/OverlayService.java", overlayService);
+            fs.writeFileSync("android/app/src/main/java/de/sportfreund/app/OverlayService.java", overlayServiceJava, "utf8");
+            console.log("OverlayService.java erfolgreich injiziert!");
           '
 
-      - name: APK bauen
+      - name: APK bauen (Kompilieren)
         run: |
           npx cap sync android
           cd android && chmod +x gradlew && ./gradlew assembleDebug
 
-      - name: Upload
+      - name: Fertige APK bereitstellen
         uses: actions/upload-artifact@v4
         with:
           name: sportfreund-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
 
