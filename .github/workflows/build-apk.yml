@@ -27,7 +27,8 @@ jobs:
           npx cap add android
           
           sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 26/g' android/variables.gradle
-          sed -i 's/dependencies {/dependencies {\n    implementation "androidx.health.connect:connect-client:1.1.0-alpha07"/g' android/app/build.gradle
+          # Hier laden wir jetzt die offizielle Java/Guava-Erweiterung für Health Connect mit!
+          sed -i 's/dependencies {/dependencies {\n    implementation "androidx.health.connect:connect-client:1.1.0-alpha07"\n    implementation "androidx.health.connect:connect-client-guava:1.1.0-alpha07"/g' android/app/build.gradle
 
       - name: XML Dateien injizieren
         run: |
@@ -45,7 +46,7 @@ jobs:
 
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.github.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.health.READ_STEPS" />
@@ -227,7 +228,7 @@ jobs:
           }
           EOF
 
-          # MainActivity.java (mit VOLLSTÄNDIGER Bridge!)
+          # MainActivity.java (Reparierte Java/Guava-Bridge!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
           import android.content.Intent;
@@ -249,25 +250,46 @@ jobs:
                   @JavascriptInterface public void getSteps() {
                       runOnUiThread(() -> {
                           try {
-                              androidx.health.connect.client.HealthConnectClient client = 
-                                  androidx.health.connect.client.HealthConnectClient.getOrCreate(MainActivity.this);
+                              // Nutze den Guava-Client für stabile Java-Abfragen
+                              androidx.health.connect.client.GuavaHealthConnectClient client = 
+                                  androidx.health.connect.client.GuavaHealthConnectClient.getOrCreate(MainActivity.this);
                               
                               java.time.Instant endTime = java.time.Instant.now();
                               java.time.Instant startTime = endTime.minus(24, java.time.temporal.ChronoUnit.HOURS);
                               
+                              androidx.health.connect.client.time.TimeRangeFilter timeRangeFilter =
+                                  androidx.health.connect.client.time.TimeRangeFilter.Companion.between(startTime, endTime);
+
                               androidx.health.connect.client.request.AggregateRequest request = 
                                   new androidx.health.connect.client.request.AggregateRequest(
                                       java.util.Collections.singleton(androidx.health.connect.client.records.StepsRecord.COUNT_TOTAL),
-                                      new androidx.health.connect.client.time.TimeRangeFilter.Companion().between(startTime, endTime)
+                                      timeRangeFilter,
+                                      java.util.Collections.emptySet()
                                   );
 
-                              client.aggregate(request, Runnable::run, (result) -> {
-                                  long steps = result.get(androidx.health.connect.client.records.StepsRecord.COUNT_TOTAL);
-                                  bridge.getWebView().post(() -> 
-                                      bridge.getWebView().evaluateJavascript("window.onStepsReceived('" + steps + "');", null)
-                                  );
-                                  return null;
-                              });
+                              com.google.common.util.concurrent.ListenableFuture<androidx.health.connect.client.aggregate.AggregationResult> future =
+                                  client.aggregate(request);
+
+                              com.google.common.util.concurrent.Futures.addCallback(future,
+                                  new com.google.common.util.concurrent.FutureCallback<androidx.health.connect.client.aggregate.AggregationResult>() {
+                                      @Override
+                                      public void onSuccess(androidx.health.connect.client.aggregate.AggregationResult result) {
+                                          Long steps = result.get(androidx.health.connect.client.records.StepsRecord.COUNT_TOTAL);
+                                          final String stepsStr = steps != null ? String.valueOf(steps) : "0";
+                                          bridge.getWebView().post(() -> 
+                                              bridge.getWebView().evaluateJavascript("window.onStepsReceived('" + stepsStr + "');", null)
+                                          );
+                                      }
+
+                                      @Override
+                                      public void onFailure(Throwable t) {
+                                          bridge.getWebView().post(() -> 
+                                              bridge.getWebView().evaluateJavascript("window.onStepsReceived('0');", null)
+                                          );
+                                      }
+                                  },
+                                  Runnable::run
+                              );
                           } catch (Exception e) {
                               bridge.getWebView().post(() -> 
                                   bridge.getWebView().evaluateJavascript("window.onStepsReceived('0');", null)
@@ -336,5 +358,3 @@ jobs:
         with:
           name: sportfreund-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
-
