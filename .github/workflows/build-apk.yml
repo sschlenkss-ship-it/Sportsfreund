@@ -28,9 +28,7 @@ jobs:
       - name: Web-Ordner vorbereiten und absichern
         run: |
           mkdir -p www
-          # Sicherstellen, dass index.html kopiert wird
           if [ -f index.html ]; then cp index.html www/; else echo "<html><body>Error</body></html>" > www/index.html; fi
-          # Kopiere eventuell vorhandene Smileys
           cp Smiley*.png www/ 2>/dev/null || true
 
       - name: Capacitor installieren
@@ -44,35 +42,39 @@ jobs:
 
       - name: Mindest-Android-Version (minSdkVersion) auf 26 anheben
         run: |
-          # Zwingend notwendig für Google Health Connect!
           sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 26/g' android/variables.gradle
-          echo "minSdkVersion erfolgreich auf 26 angehoben!"
 
-      - name: Google Health Connect Bibliothek in Gradle einbinden
+      - name: Google Health Connect Bibliothek einbinden
         run: |
-          # Fügt die connect-client Abhängigkeit in das build.gradle der App ein
           sed -i 's/dependencies {/dependencies {\n    implementation "androidx.health.connect:connect-client:1.1.0-alpha07"/g' android/app/build.gradle
-          echo "Health Connect Dependency erfolgreich hinzugefügt!"
 
-      - name: Google Health Connect XML-Config-Datei erzeugen
+      - name: Google Health Connect Sichtbarkeits-Array (Zwingend für Android 13!)
         run: |
-          # Diese Konfiguration sorgt dafür, dass Android deine App in der Health Connect Liste anzeigt!
-          mkdir -p android/app/src/main/res/xml
-          cat << 'EOF' > android/app/src/main/res/xml/health_connect_client_config.xml
+          mkdir -p android/app/src/main/res/values
+          cat << 'EOF' > android/app/src/main/res/values/health_permissions.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <health-connect-client-config />
+          <resources>
+              <array name="health_permissions">
+                  <item>android.permission.health.READ_STEPS</item>
+                  <item>android.permission.health.READ_ACTIVE_CALORIES_BURNED</item>
+                  <item>android.permission.health.READ_HEART_RATE</item>
+                  <item>androidx.health.permission.Steps.READ</item>
+                  <item>androidx.health.permission.ActiveCaloriesBurned.READ</item>
+                  <item>androidx.health.permission.HeartRate.READ</item>
+              </array>
+          </resources>
           EOF
-          echo "health_connect_client_config.xml erfolgreich erstellt!"
 
       - name: AndroidManifest.xml für Dual-System (Android 13 & 14+) patchen
         run: |
-          # Wir schreiben das Manifest komplett neu und fehlerfrei mit allen Rechten
+          # Hier ist der korrigierte, alles entscheidende ACTION_SHOW_PERMISSIONS_RATIONALE Eintrag!
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              
               <uses-permission android:name="android.permission.health.READ_STEPS" />
               <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
               <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
@@ -82,6 +84,9 @@ jobs:
 
               <queries>
                   <package android:name="com.google.android.apps.healthdata" />
+                  <intent>
+                      <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+                  </intent>
               </queries>
 
               <application
@@ -105,22 +110,22 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
 
+                      <!-- DER WICHTIGSTE EINTRAG FÜR DIE SICHTBARKEIT IN HEALTH CONNECT: -->
                       <intent-filter>
-                          <action android:name="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
+                          <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
                       </intent-filter>
 
                   </activity>
 
                   <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
-                  <meta-data android:name="androidx.health.connect.DETAILS_INTENT_FILTER_ACTION" android:value="androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE" />
-                  <meta-data android:name="androidx.health.connect.CLIENT_CONFIG" android:resource="@xml/health_connect_client_config" />
+                  
+                  <meta-data android:name="health_permissions" android:resource="@array/health_permissions" />
 
               </application>
           </manifest>
           EOF
-          echo "AndroidManifest.xml erfolgreich neu geschrieben!"
 
-      - name: MainActivity.java (Java-Brücke) injizieren
+      - name: MainActivity.java (Direkter Sprung in die App-Berechtigungen)
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
@@ -151,27 +156,24 @@ jobs:
                       runOnUiThread(new Runnable() {
                           @Override
                           public void run() {
-                              if (Build.VERSION.SDK_INT >= 34) {
-                                  requestPermissions(new String[]{
-                                      "android.permission.health.READ_STEPS",
-                                      "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
-                                      "android.permission.health.READ_HEART_RATE"
-                                  }, 1001);
-                              } else {
+                              try {
+                                  // Versuch 1: Öffnet direkt die Berechtigungsseite DEINER App in Health Connect!
+                                  Intent intent = new Intent("androidx.health.ACTION_MANAGE_HEALTH_PERMISSIONS");
+                                  intent.putExtra(Intent.EXTRA_PACKAGE_NAME, getPackageName());
+                                  startActivity(intent);
+                              } catch (Exception e1) {
                                   try {
-                                      Intent intent = new Intent("androidx.health.connect.action.REQUEST_PERMISSIONS");
-                                      intent.putExtra("androidx.health.connect.extra.PERMISSION_ARRAY", new String[]{
-                                          "androidx.health.permission.Steps.READ",
-                                          "androidx.health.permission.ActiveCaloriesBurned.READ",
-                                          "androidx.health.permission.HeartRate.READ"
-                                      });
+                                      // Versuch 2: Öffnet die allgemeinen Health Connect Einstellungen (Android 14+)
+                                      Intent intent = new Intent("android.settings.HEALTH_CONNECT_SETTINGS");
                                       startActivity(intent);
-                                  } catch (Exception e) {
+                                  } catch (Exception e2) {
                                       try {
-                                          Intent intent = new Intent("androidx.health.connect.action.HEALTH_CONNECT_SETTINGS");
+                                          // Versuch 3: Öffnet die allgemeinen Health Connect Einstellungen (Android 13)
+                                          Intent intent = new Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS");
                                           startActivity(intent);
-                                      } catch (Exception ex) {
+                                      } catch (Exception e3) {
                                           try {
+                                              // Versuch 4: Play Store Download Seite
                                               startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata")));
                                           } catch (Exception err) {}
                                       }
@@ -206,9 +208,8 @@ jobs:
               }
           }
           EOF
-          echo "MainActivity.java erfolgreich injiziert!"
 
-      - name: OverlayService.java (Riesiger Smiley 280x280) injizieren
+      - name: OverlayService.java injizieren
         run: |
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
@@ -330,7 +331,6 @@ jobs:
               }
           }
           EOF
-          echo "OverlayService.java erfolgreich injiziert!"
 
       - name: APK bauen (Kompilieren)
         run: |
@@ -342,4 +342,5 @@ jobs:
         with:
           name: sportfreund-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
 
