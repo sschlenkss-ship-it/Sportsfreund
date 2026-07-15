@@ -12,23 +12,24 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
 
-      - name: Projekt-Struktur
+      - name: Projekt-Struktur vorbereiten
         run: |
           mkdir -p www
-          cp index.html www/ 2>/dev/null || echo "<html><body>App</body></html>" > www/index.html
+          if [ ! -f index.html ]; then echo "<html><body>App</body></html>" > index.html; fi
+          cp index.html www/
           npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0
           npx cap init Sportfreund de.sportfreund.app --web-dir www
           npx cap add android
 
-      - name: System-Berechtigungen & Java-Brücke injizieren
+      - name: System-Patch & Java-Injektion
         run: |
-          # 1. Manifest-Patch für Health Connect (Android 13/14+)
           node -e '
             const fs = require("fs");
+            
+            // 1. Manifest patchen
             const path = "android/app/src/main/AndroidManifest.xml";
             let xml = fs.readFileSync(path, "utf8");
-            const permissions = `
-            <uses-permission android:name="android.permission.health.READ_STEPS"/>
+            const permissions = `<uses-permission android:name="android.permission.health.READ_STEPS"/>
             <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
             <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
             <queries>
@@ -37,7 +38,7 @@ jobs:
             xml = xml.replace("<application", permissions + "\n    <application");
             fs.writeFileSync(path, xml);
 
-            # 2. MainActivity mit echter Health-Intent Logik
+            // 2. MainActivity schreiben
             const java = `package de.sportfreund.app;
             import android.content.Intent;
             import android.net.Uri;
@@ -61,7 +62,7 @@ jobs:
             fs.writeFileSync("android/app/src/main/java/de/sportfreund/app/MainActivity.java", java);
           '
 
-      - name: Build
+      - name: Build APK
         run: |
           npx cap sync android
           cd android && chmod +x gradlew && ./gradlew assembleDebug
@@ -71,3 +72,4 @@ jobs:
         with:
           name: sportfreund-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
