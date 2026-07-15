@@ -27,8 +27,8 @@ jobs:
           npx cap add android
           
           sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 26/g' android/variables.gradle
-          # Hier laden wir jetzt die offizielle Java/Guava-Erweiterung für Health Connect mit!
-          sed -i 's/dependencies {/dependencies {\n    implementation "androidx.health.connect:connect-client:1.1.0-alpha07"\n    implementation "androidx.health.connect:connect-client-guava:1.1.0-alpha07"/g' android/app/build.gradle
+          # Nur die stabile Core-Bibliothek laden (verhindert Guava Download-Fehler komplett!)
+          sed -i 's/dependencies {/dependencies {\n    implementation "androidx.health.connect:connect-client:1.1.0-alpha07"/g' android/app/build.gradle
 
       - name: XML Dateien injizieren
         run: |
@@ -228,7 +228,7 @@ jobs:
           }
           EOF
 
-          # MainActivity.java (Reparierte Java/Guava-Bridge!)
+          # MainActivity.java (Direktes Java-Callback-Interface für maximal robuste Kotlin-Kompatibilität!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
           import android.content.Intent;
@@ -238,6 +238,9 @@ jobs:
           import android.provider.Settings;
           import android.webkit.JavascriptInterface;
           import com.getcapacitor.BridgeActivity;
+          import kotlin.coroutines.Continuation;
+          import kotlin.coroutines.CoroutineContext;
+          import kotlin.coroutines.EmptyCoroutineContext;
 
           public class MainActivity extends BridgeActivity {
               @Override
@@ -250,9 +253,8 @@ jobs:
                   @JavascriptInterface public void getSteps() {
                       runOnUiThread(() -> {
                           try {
-                              // Nutze den Guava-Client für stabile Java-Abfragen
-                              androidx.health.connect.client.GuavaHealthConnectClient client = 
-                                  androidx.health.connect.client.GuavaHealthConnectClient.getOrCreate(MainActivity.this);
+                              androidx.health.connect.client.HealthConnectClient client = 
+                                  androidx.health.connect.client.HealthConnectClient.getOrCreate(MainActivity.this);
                               
                               java.time.Instant endTime = java.time.Instant.now();
                               java.time.Instant startTime = endTime.minus(24, java.time.temporal.ChronoUnit.HOURS);
@@ -267,29 +269,36 @@ jobs:
                                       java.util.Collections.emptySet()
                                   );
 
-                              com.google.common.util.concurrent.ListenableFuture<androidx.health.connect.client.aggregate.AggregationResult> future =
-                                  client.aggregate(request);
+                              // Wir rufen die Kotlin-Suspend-Methode über das standardmäßige Java-Callback Interface auf!
+                              client.aggregate(request, new Continuation<androidx.health.connect.client.aggregate.AggregationResult>() {
+                                  @Override
+                                  public CoroutineContext getContext() {
+                                      return EmptyCoroutineContext.INSTANCE;
+                                  }
 
-                              com.google.common.util.concurrent.Futures.addCallback(future,
-                                  new com.google.common.util.concurrent.FutureCallback<androidx.health.connect.client.aggregate.AggregationResult>() {
-                                      @Override
-                                      public void onSuccess(androidx.health.connect.client.aggregate.AggregationResult result) {
-                                          Long steps = result.get(androidx.health.connect.client.records.StepsRecord.COUNT_TOTAL);
-                                          final String stepsStr = steps != null ? String.valueOf(steps) : "0";
-                                          bridge.getWebView().post(() -> 
-                                              bridge.getWebView().evaluateJavascript("window.onStepsReceived('" + stepsStr + "');", null)
-                                          );
-                                      }
-
-                                      @Override
-                                      public void onFailure(Throwable t) {
+                                  @Override
+                                  public void resumeWith(Object result) {
+                                      try {
+                                          if (result != null && result.getClass().getName().contains("Failure")) {
+                                              bridge.getWebView().post(() -> 
+                                                  bridge.getWebView().evaluateJavascript("window.onStepsReceived('0');", null)
+                                              );
+                                          } else {
+                                              androidx.health.connect.client.aggregate.AggregationResult aggResult = 
+                                                  (androidx.health.connect.client.aggregate.AggregationResult) result;
+                                              Long steps = aggResult.get(androidx.health.connect.client.records.StepsRecord.COUNT_TOTAL);
+                                              final String stepsStr = steps != null ? String.valueOf(steps) : "0";
+                                              bridge.getWebView().post(() -> 
+                                                  bridge.getWebView().evaluateJavascript("window.onStepsReceived('" + stepsStr + "');", null)
+                                              );
+                                          }
+                                      } catch (Exception e) {
                                           bridge.getWebView().post(() -> 
                                               bridge.getWebView().evaluateJavascript("window.onStepsReceived('0');", null)
                                           );
                                       }
-                                  },
-                                  Runnable::run
-                              );
+                                  }
+                              });
                           } catch (Exception e) {
                               bridge.getWebView().post(() -> 
                                   bridge.getWebView().evaluateJavascript("window.onStepsReceived('0');", null)
@@ -358,3 +367,4 @@ jobs:
         with:
           name: sportfreund-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
