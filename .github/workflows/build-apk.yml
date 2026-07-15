@@ -28,6 +28,14 @@ jobs:
           node -e '
             const fs = require("fs");
             
+            // --- NEU: Mindestversion auf 26 anheben für Health Connect! ---
+            const varsPath = "android/variables.gradle";
+            if (fs.existsSync(varsPath)) {
+                let vars = fs.readFileSync(varsPath, "utf8");
+                vars = vars.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 26");
+                fs.writeFileSync(varsPath, vars);
+            }
+
             // 1. Gradle für Health Connect updaten
             const gradlePath = "android/app/build.gradle";
             let gradle = fs.readFileSync(gradlePath, "utf8");
