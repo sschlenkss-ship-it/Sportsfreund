@@ -1,1 +1,54 @@
+name: Build Android APK
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Umgebungen
+        uses: actions/setup-java@v4
+        with: { distribution: 'zulu', java-version: '17' }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Capacitor Setup
+        run: |
+          mkdir -p www
+          if [ -f index.html ]; then cp index.html www/; else echo "<html><body>Error</body></html>" > www/index.html; fi
+          npm install @capacitor/core@6.0.0 @capacitor/cli@6.0.0 @capacitor/android@6.0.0 --save-exact
+          npx cap init Sportfreund de.sportfreund.app --web-dir www
+          npx cap add android
+          sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 26/g' android/variables.gradle
+          sed -i 's/dependencies {/dependencies {\n    implementation "androidx.health.connect:connect-client:1.1.0-alpha07"/g' android/app/build.gradle
+
+      - name: Inject Assets & Code
+        run: |
+          # Icon einfügen (Falls app-icon.png im Repo existiert)
+          if [ -f app-icon.png ]; then
+            for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              mkdir -p android/app/src/main/res/mipmap-$size
+              cp app-icon.png android/app/src/main/res/mipmap-$size/ic_launcher.png
+              cp app-icon.png android/app/src/main/res/mipmap-$size/ic_launcher_round.png
+            done
+          fi
+
+          # HIER DEINE ORIGINALEN JAVA/XML DATEIEN EINFÜGEN
+          # Ich habe hier die Struktur gewahrt, damit du deinen bewährten Code 1:1 hineinkopieren kannst:
+          
+          # 1. Manifest
+          # 2. UnlockReceiver.java
+          # 3. OverlayService.java
+          # 4. MainActivity.java (mit deiner exakten Fitness-Bridge)
+
+      - name: Build APK
+        run: |
+          npx cap sync android
+          cd android && chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with: { name: sportfreund-app, path: android/app/build/outputs/apk/debug/app-debug.apk }
 
