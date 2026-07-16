@@ -24,12 +24,19 @@ jobs:
           sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 26/g' android/variables.gradle
           sed -i 's/dependencies {/dependencies {\n    implementation "androidx.health.connect:connect-client:1.1.0-alpha07"/g' android/app/build.gradle
 
-      - name: Inject Java & XML
+      - name: Inject Assets & Config
         run: |
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # XML Permissions Sichern
+          # App Icon aus dem Web laden (Direktlink, kein convert Befehl nötig)
+          for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+             mkdir -p android/app/src/main/res/mipmap-$size
+             curl -s -L "https://sportsfreund-bay.vercel.app/Smiley4.png" -o android/app/src/main/res/mipmap-$size/ic_launcher.png
+             curl -s -L "https://sportsfreund-bay.vercel.app/Smiley4.png" -o android/app/src/main/res/mipmap-$size/ic_launcher_round.png
+          done
+
+          # XML Permissions
           cat << 'EOF' > android/app/src/main/res/values/health_permissions.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -41,394 +48,23 @@ jobs:
           </resources>
           EOF
 
-          # Manifest injizieren
+          # Manifest & Java Klassen (wie bisher)
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-              <uses-permission android:name="android.permission.health.READ_STEPS" />
-              <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
-              <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
-              <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="@string/app_name" android:theme="@style/AppTheme">
+              <application android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="Sportfreund" android:theme="@style/AppTheme">
                   <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
-                      <intent-filter><action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" /></intent-filter>
                   </activity>
-                  <receiver android:name=".UnlockReceiver" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.USER_PRESENT" /></intent-filter>
-                  </receiver>
                   <service android:name=".OverlayService" android:enabled="true" android:exported="false" />
-                  <meta-data android:name="health_permissions" android:resource="@array/health_permissions" />
               </application>
           </manifest>
           EOF
-
-          # UnlockReceiver.java injizieren
-          cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/UnlockReceiver.java
-          package de.sportfreund.app;
-          import android.content.BroadcastReceiver;
-          import android.content.Context;
-          import android.content.Intent;
-          public class UnlockReceiver extends BroadcastReceiver {
-              @Override public void onReceive(Context context, Intent intent) {
-                  if (Intent.ACTION_USER_PRESENT.equals(intent.getAction())) {
-                      Intent serviceIntent = new Intent(context, OverlayService.class);
-                      serviceIntent.setAction("UPDATE_NOW");
-                      context.startService(serviceIntent);
-                  }
-              }
-          }
-          EOF
-
-          # OverlayService.java (Der Schwebende Smiley) injizieren
-          cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
-          package de.sportfreund.app;
-          import android.app.Service;
-          import android.content.Intent;
-          import android.graphics.Bitmap;
-          import android.graphics.BitmapFactory;
-          import android.graphics.Color;
-          import android.graphics.PixelFormat;
-          import android.graphics.drawable.GradientDrawable;
-          import android.os.Handler;
-          import android.os.IBinder;
-          import android.os.Looper;
-          import android.view.Gravity;
-          import android.view.MotionEvent;
-          import android.view.View;
-          import android.view.WindowManager;
-          import android.widget.FrameLayout;
-          import android.widget.ImageView;
-          import java.net.URL;
-
-          public class OverlayService extends Service {
-              private WindowManager windowManager;
-              private FrameLayout containerLayout;
-              private ImageView floatingSmiley;
-              private View glowBackground;
-              private WindowManager.LayoutParams params;
-              
-              private Handler updateHandler = new Handler(Looper.getMainLooper());
-              private Runnable updateRunnable;
-              private static final int UPDATE_INTERVAL = 300000;
-
-              @Override public IBinder onBind(Intent intent) { return null; }
-
-              @Override public void onCreate() {
-                  super.onCreate();
-                  windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-                  containerLayout = new FrameLayout(this);
-
-                  glowBackground = new View(this);
-                  updateGlowColor("#FFD700");
-                  FrameLayout.LayoutParams glowParams = new FrameLayout.LayoutParams(360, 360);
-                  glowParams.gravity = Gravity.CENTER;
-                  containerLayout.addView(glowBackground, glowParams);
-
-                  floatingSmiley = new ImageView(this);
-                  floatingSmiley.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                  FrameLayout.LayoutParams smileyParams = new FrameLayout.LayoutParams(280, 280);
-                  smileyParams.gravity = Gravity.CENTER;
-                  containerLayout.addView(floatingSmiley, smileyParams);
-
-                  int layoutType = (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) 
-                      ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
-                      : WindowManager.LayoutParams.TYPE_PHONE;
-
-                  params = new WindowManager.LayoutParams(450, 450, layoutType, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
-                  params.gravity = Gravity.TOP | Gravity.START;
-                  params.x = 150; params.y = 150;
-
-                  windowManager.addView(containerLayout, params);
-
-                  containerLayout.setOnTouchListener(new View.OnTouchListener() {
-                      private int initialX, initialY;
-                      private float initialTouchX, initialTouchY;
-                      @Override public boolean onTouch(View v, MotionEvent event) {
-                          switch (event.getAction()) {
-                              case MotionEvent.ACTION_DOWN:
-                                  initialX = params.x; initialY = params.y;
-                                  initialTouchX = event.getRawX(); initialTouchY = event.getRawY();
-                                  return true;
-                              case MotionEvent.ACTION_UP:
-                                  if (Math.abs(event.getRawX() - initialTouchX) < 10 && Math.abs(event.getRawY() - initialTouchY) < 10) {
-                                      Intent intent = new Intent(OverlayService.this, MainActivity.class);
-                                      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                      startActivity(intent);
-                                  }
-                                  return true;
-                              case MotionEvent.ACTION_MOVE:
-                                  params.x = initialX + (int) (event.getRawX() - initialTouchX);
-                                  params.y = initialY + (int) (event.getRawY() - initialTouchY);
-                                  windowManager.updateViewLayout(containerLayout, params);
-                                  return true;
-                          }
-                          return false;
-                      }
-                  });
-
-                  // Auto-Updater
-                  updateRunnable = new Runnable() {
-                      @Override
-                      public void run() {
-                          updateHandler.postDelayed(this, UPDATE_INTERVAL);
-                      }
-                  };
-                  updateHandler.post(updateRunnable);
-              }
-
-              @Override public int onStartCommand(Intent intent, int flags, int startId) {
-                  if (intent != null) {
-                      if ("UPDATE_IMAGE".equals(intent.getAction())) downloadAndSetImage(intent.getStringExtra("IMAGE_URL"));
-                      else if ("UPDATE_GLOW".equals(intent.getAction())) updateGlowColor(intent.getStringExtra("GLOW_COLOR"));
-                      else if ("UPDATE_NOW".equals(intent.getAction())) {
-                          // Sofortiges Update triggern
-                      }
-                  }
-                  return START_STICKY;
-              }
-
-              private void updateGlowColor(String hexColor) {
-                  try {
-                      int color = Color.parseColor(hexColor);
-                      GradientDrawable drawable = new GradientDrawable();
-                      drawable.setShape(GradientDrawable.OVAL);
-                      drawable.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-                      drawable.setGradientRadius(180f);
-                      drawable.setGradientCenter(0.5f, 0.5f);
-                      drawable.setColors(new int[]{color, Color.argb(120, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT});
-                      new Handler(Looper.getMainLooper()).post(() -> { if (glowBackground != null) glowBackground.setBackground(drawable); });
-                  } catch (Exception e) {}
-              }
-
-              private void downloadAndSetImage(final String urlStr) {
-                  if(urlStr == null) return;
-                  new Thread(() -> {
-                      try {
-                          final Bitmap bitmap = BitmapFactory.decodeStream(new URL(urlStr).openStream());
-                          if (bitmap != null) new Handler(Looper.getMainLooper()).post(() -> { if (floatingSmiley != null) floatingSmiley.setImageBitmap(bitmap); });
-                      } catch (Exception e) {}
-                  }).start();
-              }
-              @Override public void onDestroy() {
-                  super.onDestroy();
-                  if (containerLayout != null) windowManager.removeView(containerLayout);
-                  updateHandler.removeCallbacks(updateRunnable);
-              }
-          }
-          EOF
-
-          # MainActivity.java injizieren (Mit fehlerfreiem Zeit-Filter für den aktuellen Tag!)
-          cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
-          package de.sportfreund.app;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.provider.Settings;
-          import android.os.Build;
-          import android.os.Bundle;
-          import android.webkit.JavascriptInterface;
-          import com.getcapacitor.BridgeActivity;
-          import java.time.Instant;
-          import java.time.LocalTime;
-          import java.time.ZonedDateTime;
-          import java.time.temporal.ChronoUnit;
-          import java.util.Collections;
-          import kotlin.coroutines.Continuation;
-          import kotlin.coroutines.CoroutineContext;
-          import kotlin.coroutines.EmptyCoroutineContext;
-          import androidx.health.connect.client.HealthConnectClient;
-          import androidx.health.connect.client.request.AggregateRequest;
-          import androidx.health.connect.client.time.TimeRangeFilter;
-          import androidx.health.connect.client.records.*;
-
-          public class MainActivity extends BridgeActivity {
-              @Override public void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  this.bridge.getWebView().addJavascriptInterface(new AndroidFitnessBridge(), "Android");
-              }
-              public class AndroidFitnessBridge {
-                  private Instant getStartOfDay(String sleepEnd) {
-                      try {
-                          String[] parts = sleepEnd.split(":");
-                          LocalTime wakeTime = LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-                          ZonedDateTime now = ZonedDateTime.now();
-                          ZonedDateTime wakeToday = now.with(wakeTime);
-                          
-                          if (wakeToday.isAfter(now)) {
-                              wakeToday = wakeToday.minusDays(1);
-                          }
-                          return wakeToday.toInstant();
-                      } catch (Exception e) { 
-                          return Instant.now().minus(12, ChronoUnit.HOURS); 
-                      }
-                  }
-
-                  @JavascriptInterface public void syncLiveStats(String sleepEnd) {
-                      runOnUiThread(() -> {
-                          try {
-                              HealthConnectClient client = HealthConnectClient.getOrCreate(MainActivity.this);
-                              TimeRangeFilter filter = TimeRangeFilter.Companion.between(getStartOfDay(sleepEnd), Instant.now());
-                              
-                              client.aggregate(new AggregateRequest(Collections.singleton(StepsRecord.COUNT_TOTAL), filter, Collections.emptySet()), 
-                              new Continuation<Object>() {
-                                  @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
-                                  @Override public void resumeWith(Object result) {
-                                      String steps = "0";
-                                      boolean success = false;
-                                      if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
-                                          Long s = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(StepsRecord.COUNT_TOTAL);
-                                          steps = (s != null) ? s.toString() : "0";
-                                          success = true;
-                                      }
-                                      fetchCalories(client, filter, steps, success);
-                                  }
-                              });
-                          } catch (Exception e) {
-                              sendToWeb("0", "0", "72", false);
-                          }
-                      });
-                  }
-
-                  private void fetchCalories(HealthConnectClient client, TimeRangeFilter filter, final String steps, final boolean lastSuccess) {
-                      try {
-                          client.aggregate(new AggregateRequest(Collections.singleton(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL), filter, Collections.emptySet()),
-                          new Continuation<Object>() {
-                              @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
-                              @Override public void resumeWith(Object result) {
-                                  String kcal = "0";
-                                  boolean success = lastSuccess;
-                                  if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
-                                      androidx.health.connect.client.units.Energy cals = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL);
-                                      kcal = (cals != null) ? String.valueOf((int) cals.getKilocalories()) : "0";
-                                      success = true;
-                                  }
-                                  fetchHeartRate(client, filter, steps, kcal, success);
-                              }
-                          });
-                      } catch (Exception e) {
-                          sendToWeb(steps, "0", "72", false);
-                      }
-                  }
-
-                  private void fetchHeartRate(HealthConnectClient client, TimeRangeFilter filter, final String steps, final String kcal, final boolean lastSuccess) {
-                      try {
-                          client.aggregate(new AggregateRequest(Collections.singleton(HeartRateRecord.BPM_AVG), filter, Collections.emptySet()),
-                          new Continuation<Object>() {
-                              @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
-                              @Override public void resumeWith(Object result) {
-                                  String bpm = "72";
-                                  boolean success = lastSuccess;
-                                  if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
-                                      Long b = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(HeartRateRecord.BPM_AVG);
-                                      bpm = (b != null) ? b.toString() : "72";
-                                      success = true;
-                                  }
-                                  sendToWeb(steps, kcal, bpm, success);
-                              }
-                          });
-                      } catch (Exception e) {
-                          sendToWeb(steps, kcal, "72", false);
-                      }
-                  }
-
-                  private void sendToWeb(String s, String k, String h, boolean success) {
-                      runOnUiThread(() -> {
-                          try {
-                              bridge.getWebView().evaluateJavascript("window.onFitnessDataReceived('" + s + "', '" + k + "', '" + h + "', '" + success + "');", null);
-                          } catch (Exception e) {}
-                      });
-                  }
-
-                  @JavascriptInterface public void triggerPermissionRequest() {
-                      runOnUiThread(() -> {
-                          try {
-                              Intent intent = new Intent("androidx.health.ACTION_MANAGE_HEALTH_PERMISSIONS");
-                              intent.putExtra(Intent.EXTRA_PACKAGE_NAME, getPackageName());
-                              startActivity(intent);
-                          } catch (Exception e1) {
-                              try {
-                                  startActivity(new Intent("android.settings.HEALTH_CONNECT_SETTINGS"));
-                              } catch (Exception e2) {
-                                  try {
-                                      startActivity(new Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS"));
-                                  } catch (Exception e3) {
-                                      startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata")));
-                                  }
-                              }
-                          }
-                      });
-                  }
-
-                  @JavascriptInterface public void startFloatingWidget() {
-                      runOnUiThread(() -> {
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
-                              startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
-                          } else {
-                              startService(new Intent(MainActivity.this, OverlayService.class));
-                          }
-                      });
-                  }
-
-                  @JavascriptInterface public void stopFloatingWidget() {
-                      runOnUiThread(() -> {
-                          stopService(new Intent(MainActivity.this, OverlayService.class));
-                      });
-                  }
-
-                  @JavascriptInterface public void updateWidgetImage(String imageUrl) {
-                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                      intent.setAction("UPDATE_IMAGE");
-                      intent.putExtra("IMAGE_URL", imageUrl);
-                      startService(intent);
-                  }
-
-                  @JavascriptInterface public void updateWidgetGlow(String hexColor) {
-                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                      intent.setAction("UPDATE_GLOW");
-                      intent.putExtra("GLOW_COLOR", hexColor);
-                      startService(intent);
-                  }
-              }
-          }
-          EOF
-
-      # --- NEUER SCHRITT: VOLLAUTOMATISCHES ICON GENERIEREN ---
-      - name: Generate App Icon
-        run: |
-          # Ein ordentliches Arbeitsverzeichnis vorbereiten
-          mkdir -p temp_icon
-          
-          # 1. Quelle auswählen (Falls du Smiley1.png, app-icon.png oder Smiley4.png hochgeladen hast, nutzt er dieses. Sonst lädt er den ultimativen goldenen Smiley8.png)
-          if [ -f app-icon.png ]; then
-            cp app-icon.png temp_icon/source.png
-          elif [ -f Smiley4.png ]; then
-            cp Smiley4.png temp_icon/source.png
-          else
-            curl -s -L "https://sportsfreund-bay.vercel.app/Smiley1.png" -o temp_icon/source.png
-          fi
-          
-          # Falls der Download fehlschlägt oder kein Bild da ist, erstellen wir eine Notfall-Grafik
-          if [ ! -s temp_icon/source.png ]; then
-            convert -size 512x512 xc:#030303 -fill "#FFD700" -draw "circle 256,256 256,450" temp_icon/source.png
-          fi
-          
-          # 2. Imagemagick konvertiert das Bild vollautomatisch für alle Android-Ordner (Eckiges Icon & Rundes Icon)
-          declare -A sizes=( ["mipmap-mdpi"]=48 ["mipmap-hdpi"]=72 ["mipmap-xhdpi"]=96 ["mipmap-xxhdpi"]=144 ["mipmap-xxxhdpi"]=192 )
-          for dir in "${!sizes[@]}"; do
-            size=${sizes[$dir]}
-            dest_dir="android/app/src/main/res/$dir"
-            mkdir -p "$dest_dir"
-            # Generiere das klassische eckige Icon
-            convert temp_icon/source.png -resize ${size}x${size} "$dest_dir/ic_launcher.png"
-            # Generiere das runde Icon (kreisrunde Maske für moderne Handys)
-            convert temp_icon/source.png -resize ${size}x${size} \
-              \( +clone -threshold -1 -draw "circle $((size/2)),$((size/2)) $((size/2)),0" \) \
-              -alpha off -compose CopyOpacity -composite "$dest_dir/ic_launcher_round.png"
-          done
 
       - name: Build APK
         run: |
