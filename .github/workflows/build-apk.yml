@@ -44,7 +44,7 @@ jobs:
           # Manifest injizieren
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.github.com/apk/res/android">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.health.READ_STEPS" />
@@ -186,7 +186,7 @@ jobs:
                       if ("UPDATE_IMAGE".equals(intent.getAction())) downloadAndSetImage(intent.getStringExtra("IMAGE_URL"));
                       else if ("UPDATE_GLOW".equals(intent.getAction())) updateGlowColor(intent.getStringExtra("GLOW_COLOR"));
                       else if ("UPDATE_NOW".equals(intent.getAction())) {
-                          // Sofortiges Update triggern (z.B. nach Entsperren)
+                          // Sofortiges Update triggern
                       }
                   }
                   return START_STICKY;
@@ -222,7 +222,7 @@ jobs:
           }
           EOF
 
-          # MainActivity.java injizieren
+          # MainActivity.java injizieren (Mit fehlerfreiem Zeit-Filter für den aktuellen Tag!)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
           import android.content.Intent;
@@ -255,8 +255,18 @@ jobs:
                       try {
                           String[] parts = sleepEnd.split(":");
                           LocalTime wakeTime = LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-                          return ZonedDateTime.now().with(wakeTime).toInstant();
-                      } catch (Exception e) { return Instant.now().minus(12, ChronoUnit.HOURS); }
+                          ZonedDateTime now = ZonedDateTime.now();
+                          ZonedDateTime wakeToday = now.with(wakeTime);
+                          
+                          // Falls die heutige Aufwachzeit nach der jetzigen Uhrzeit liegt,
+                          // weichen wir automatisch auf die Aufwachzeit von gestern aus!
+                          if (wakeToday.isAfter(now)) {
+                              wakeToday = wakeToday.minusDays(1);
+                          }
+                          return wakeToday.toInstant();
+                      } catch (Exception e) { 
+                          return Instant.now().minus(12, ChronoUnit.HOURS); 
+                      }
                   }
 
                   @JavascriptInterface public void syncLiveStats(String sleepEnd) {
