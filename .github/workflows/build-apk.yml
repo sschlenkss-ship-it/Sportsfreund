@@ -27,9 +27,13 @@ jobs:
       - name: Inject Java & XML
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
-          # Hier wird die MainActivity.java absolut absturzsicher erstellt:
+          # Hier wird die MainActivity.java mit allen Interfaces absolut absturzsicher erstellt:
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.provider.Settings;
+          import android.os.Build;
           import android.os.Bundle;
           import android.webkit.JavascriptInterface;
           import com.getcapacitor.BridgeActivity;
@@ -63,7 +67,6 @@ jobs:
                   @JavascriptInterface public void syncLiveStats(String sleepEnd) {
                       runOnUiThread(() -> {
                           try {
-                              // Absicherung gegen "Service not available" Abstürze
                               HealthConnectClient client = HealthConnectClient.getOrCreate(MainActivity.this);
                               TimeRangeFilter filter = TimeRangeFilter.Companion.between(getStartOfDay(sleepEnd), Instant.now());
                               
@@ -72,64 +75,119 @@ jobs:
                                   @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
                                   @Override public void resumeWith(Object result) {
                                       String steps = "0";
+                                      boolean success = false;
                                       if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
                                           Long s = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(StepsRecord.COUNT_TOTAL);
                                           steps = (s != null) ? s.toString() : "0";
+                                          success = true;
                                       }
-                                      fetchCalories(client, filter, steps);
+                                      fetchCalories(client, filter, steps, success);
                                   }
                               });
                           } catch (Exception e) {
-                              // Bei Fehler im Hintergrund den Webview informieren und Absturz verhindern
-                              sendToWeb("0", "0", "72");
+                              sendToWeb("0", "0", "72", false);
                           }
                       });
                   }
 
-                  private void fetchCalories(HealthConnectClient client, TimeRangeFilter filter, final String steps) {
+                  private void fetchCalories(HealthConnectClient client, TimeRangeFilter filter, final String steps, final boolean lastSuccess) {
                       try {
                           client.aggregate(new AggregateRequest(Collections.singleton(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL), filter, Collections.emptySet()),
                           new Continuation<Object>() {
                               @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
                               @Override public void resumeWith(Object result) {
                                   String kcal = "0";
+                                  boolean success = lastSuccess;
                                   if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
                                       androidx.health.connect.client.units.Energy cals = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL);
                                       kcal = (cals != null) ? String.valueOf((int) cals.getKilocalories()) : "0";
+                                      success = true;
                                   }
-                                  fetchHeartRate(client, filter, steps, kcal);
+                                  fetchHeartRate(client, filter, steps, kcal, success);
                               }
                           });
                       } catch (Exception e) {
-                          sendToWeb(steps, "0", "72");
+                          sendToWeb(steps, "0", "72", false);
                       }
                   }
 
-                  private void fetchHeartRate(HealthConnectClient client, TimeRangeFilter filter, final String steps, final String kcal) {
+                  private void fetchHeartRate(HealthConnectClient client, TimeRangeFilter filter, final String steps, final String kcal, final boolean lastSuccess) {
                       try {
                           client.aggregate(new AggregateRequest(Collections.singleton(HeartRateRecord.BPM_AVG), filter, Collections.emptySet()),
                           new Continuation<Object>() {
                               @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
                               @Override public void resumeWith(Object result) {
                                   String bpm = "72";
+                                  boolean success = lastSuccess;
                                   if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
                                       Long b = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(HeartRateRecord.BPM_AVG);
                                       bpm = (b != null) ? b.toString() : "72";
+                                      success = true;
                                   }
-                                  sendToWeb(steps, kcal, bpm);
+                                  sendToWeb(steps, kcal, bpm, success);
                               }
                           });
                       } catch (Exception e) {
-                          sendToWeb(steps, kcal, "72");
+                          sendToWeb(steps, kcal, "72", false);
                       }
                   }
 
-                  private void sendToWeb(String s, String k, String h) {
+                  private void sendToWeb(String s, String k, String h, boolean success) {
                       runOnUiThread(() -> {
                           try {
-                              bridge.getWebView().evaluateJavascript("window.onFitnessDataReceived('" + s + "', '" + k + "', '" + h + "');", null);
+                              bridge.getWebView().evaluateJavascript("window.onFitnessDataReceived('" + s + "', '" + k + "', '" + h + "', '" + success + "');", null);
                           } catch (Exception e) {}
                       });
+                  }
+
+                  @JavascriptInterface public void triggerPermissionRequest() {
+                      runOnUiThread(() -> {
+                          try {
+                              Intent intent = new Intent("androidx.health.ACTION_MANAGE_HEALTH_PERMISSIONS");
+                              intent.putExtra(Intent.EXTRA_PACKAGE_NAME, getPackageName());
+                              startActivity(intent);
+                          } catch (Exception e1) {
+                              try {
+                                  startActivity(new Intent("android.settings.HEALTH_CONNECT_SETTINGS"));
+                              } catch (Exception e2) {
+                                  try {
+                                      startActivity(new Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS"));
+                                  } catch (Exception e3) {
+                                      startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata")));
+                                  }
+                              }
+                          }
+                      });
+                  }
+
+                  @JavascriptInterface public void startFloatingWidget() {
+                      runOnUiThread(() -> {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
+                              startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
+                          } else {
+                              startService(new Intent(MainActivity.this, OverlayService.class));
+                          }
+                      });
+                  }
+
+                  @JavascriptInterface public void stopFloatingWidget() {
+                      runOnUiThread(() -> {
+                          stopService(new Intent(MainActivity.this, OverlayService.class));
+                      });
+                  }
+
+                  @JavascriptInterface public void updateWidgetImage(String imageUrl) {
+                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
+                      intent.setAction("UPDATE_IMAGE");
+                      intent.putExtra("IMAGE_URL", imageUrl);
+                      startService(intent);
+                  }
+
+                  @JavascriptInterface public void updateWidgetGlow(String hexColor) {
+                      Intent intent = new Intent(MainActivity.this, OverlayService.class);
+                      intent.setAction("UPDATE_GLOW");
+                      intent.putExtra("GLOW_COLOR", hexColor);
+                      startService(intent);
                   }
               }
           }
