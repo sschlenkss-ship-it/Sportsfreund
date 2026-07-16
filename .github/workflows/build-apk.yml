@@ -85,7 +85,7 @@ jobs:
                               String kcal = "0";
                               if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
                                   androidx.health.connect.client.units.Energy cals = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL);
-                                  kcal = (cals != null) ? String.valueOf((int) cals.getInKilocalories()) : "0";
+                                  kcal = (cals != null) ? String.valueOf((int) cals.getKilocalories()) : "0";
                               }
                               fetchHeartRate(client, filter, steps, kcal);
                           }
