@@ -27,7 +27,7 @@ jobs:
       - name: Inject Java & XML
         run: |
           mkdir -p android/app/src/main/java/de/sportfreund/app
-          # Hier wird die MainActivity.java direkt beim Build erstellt:
+          # Hier wird die MainActivity.java absolut absturzsicher erstellt:
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
           import android.os.Bundle;
@@ -59,54 +59,77 @@ jobs:
                           return ZonedDateTime.now().with(wakeTime).toInstant();
                       } catch (Exception e) { return Instant.now().minus(12, ChronoUnit.HOURS); }
                   }
+
                   @JavascriptInterface public void syncLiveStats(String sleepEnd) {
                       runOnUiThread(() -> {
-                          HealthConnectClient client = HealthConnectClient.getOrCreate(MainActivity.this);
-                          TimeRangeFilter filter = TimeRangeFilter.Companion.between(getStartOfDay(sleepEnd), Instant.now());
-                          client.aggregate(new AggregateRequest(Collections.singleton(StepsRecord.COUNT_TOTAL), filter, Collections.emptySet()), 
+                          try {
+                              // Absicherung gegen "Service not available" Abstürze
+                              HealthConnectClient client = HealthConnectClient.getOrCreate(MainActivity.this);
+                              TimeRangeFilter filter = TimeRangeFilter.Companion.between(getStartOfDay(sleepEnd), Instant.now());
+                              
+                              client.aggregate(new AggregateRequest(Collections.singleton(StepsRecord.COUNT_TOTAL), filter, Collections.emptySet()), 
+                              new Continuation<Object>() {
+                                  @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
+                                  @Override public void resumeWith(Object result) {
+                                      String steps = "0";
+                                      if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
+                                          Long s = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(StepsRecord.COUNT_TOTAL);
+                                          steps = (s != null) ? s.toString() : "0";
+                                      }
+                                      fetchCalories(client, filter, steps);
+                                  }
+                              });
+                          } catch (Exception e) {
+                              // Bei Fehler im Hintergrund den Webview informieren und Absturz verhindern
+                              sendToWeb("0", "0", "72");
+                          }
+                      });
+                  }
+
+                  private void fetchCalories(HealthConnectClient client, TimeRangeFilter filter, final String steps) {
+                      try {
+                          client.aggregate(new AggregateRequest(Collections.singleton(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL), filter, Collections.emptySet()),
                           new Continuation<Object>() {
                               @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
                               @Override public void resumeWith(Object result) {
-                                  String steps = "0";
+                                  String kcal = "0";
                                   if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
-                                      Long s = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(StepsRecord.COUNT_TOTAL);
-                                      steps = (s != null) ? s.toString() : "0";
+                                      androidx.health.connect.client.units.Energy cals = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL);
+                                      kcal = (cals != null) ? String.valueOf((int) cals.getKilocalories()) : "0";
                                   }
-                                  fetchCalories(client, filter, steps);
+                                  fetchHeartRate(client, filter, steps, kcal);
                               }
                           });
-                      });
+                      } catch (Exception e) {
+                          sendToWeb(steps, "0", "72");
+                      }
                   }
-                  private void fetchCalories(HealthConnectClient client, TimeRangeFilter filter, final String steps) {
-                      client.aggregate(new AggregateRequest(Collections.singleton(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL), filter, Collections.emptySet()),
-                      new Continuation<Object>() {
-                          @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
-                          @Override public void resumeWith(Object result) {
-                              String kcal = "0";
-                              if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
-                                  androidx.health.connect.client.units.Energy cals = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL);
-                                  kcal = (cals != null) ? String.valueOf((int) cals.getKilocalories()) : "0";
-                              }
-                              fetchHeartRate(client, filter, steps, kcal);
-                          }
-                      });
-                  }
+
                   private void fetchHeartRate(HealthConnectClient client, TimeRangeFilter filter, final String steps, final String kcal) {
-                      client.aggregate(new AggregateRequest(Collections.singleton(HeartRateRecord.BPM_AVG), filter, Collections.emptySet()),
-                      new Continuation<Object>() {
-                          @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
-                          @Override public void resumeWith(Object result) {
-                              String bpm = "72";
-                              if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
-                                  Long b = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(HeartRateRecord.BPM_AVG);
-                                  bpm = (b != null) ? b.toString() : "72";
+                      try {
+                          client.aggregate(new AggregateRequest(Collections.singleton(HeartRateRecord.BPM_AVG), filter, Collections.emptySet()),
+                          new Continuation<Object>() {
+                              @Override public CoroutineContext getContext() { return EmptyCoroutineContext.INSTANCE; }
+                              @Override public void resumeWith(Object result) {
+                                  String bpm = "72";
+                                  if (result instanceof androidx.health.connect.client.aggregate.AggregationResult) {
+                                      Long b = ((androidx.health.connect.client.aggregate.AggregationResult) result).get(HeartRateRecord.BPM_AVG);
+                                      bpm = (b != null) ? b.toString() : "72";
+                                  }
+                                  sendToWeb(steps, kcal, bpm);
                               }
-                              sendToWeb(steps, kcal, bpm);
-                          }
-                      });
+                          });
+                      } catch (Exception e) {
+                          sendToWeb(steps, kcal, "72");
+                      }
                   }
+
                   private void sendToWeb(String s, String k, String h) {
-                      runOnUiThread(() -> bridge.getWebView().evaluateJavascript("window.onFitnessDataReceived('" + s + "', '" + k + "', '" + h + "');", null));
+                      runOnUiThread(() -> {
+                          try {
+                              bridge.getWebView().evaluateJavascript("window.onFitnessDataReceived('" + s + "', '" + k + "', '" + h + "');", null);
+                          } catch (Exception e) {}
+                      });
                   }
               }
           }
@@ -120,3 +143,4 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with: { name: sportfreund-app, path: android/app/build/outputs/apk/debug/app-debug.apk }
+
