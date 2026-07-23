@@ -9,11 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Umgebungen
         uses: actions/setup-java@v4
         with: { distribution: 'zulu', java-version: '17' }
+
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+
       - name: Capacitor Setup
         run: |
           mkdir -p www
@@ -29,6 +32,7 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
+          # 1. App-Icon vorbereiten (Eigenes Icon oder Fallback-Smiley)
           if [ -f app-icon.png ]; then
             echo "Eigener App-Icon gefunden. Kopiere..."
           else
@@ -36,13 +40,18 @@ jobs:
             curl -s -L "https://sportsfreund-bay.vercel.app/Smiley4.png" -o app-icon.png
           fi
 
+          # 2. Adaptive Icons löschen, damit Android zwingend die PNG-Dateien nutzt!
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+
+          # 3. PNGs in alle Android-Auflösungen kopieren
           for size in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             mkdir -p android/app/src/main/res/mipmap-$size
             cp app-icon.png android/app/src/main/res/mipmap-$size/ic_launcher.png
             cp app-icon.png android/app/src/main/res/mipmap-$size/ic_launcher_round.png
+            cp app-icon.png android/app/src/main/res/mipmap-$size/ic_launcher_foreground.png
           done
 
-          # Permissions XML erstellen
+          # Health Permissions XML erstellen
           cat << 'EOF' > android/app/src/main/res/values/health_permissions.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -54,7 +63,7 @@ jobs:
           </resources>
           EOF
 
-          # Manifest injizieren
+          # AndroidManifest.xml injizieren
           cat << 'EOF' > android/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
@@ -99,7 +108,7 @@ jobs:
           }
           EOF
 
-          # OverlayService.java (Samsung-Sicher & Sauber Stoppbar)
+          # OverlayService.java (Samsung-sicherer schwebender Smiley)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
           import android.app.Service;
@@ -201,7 +210,6 @@ jobs:
                           else if ("UPDATE_GLOW".equals(intent.getAction())) updateGlowColor(intent.getStringExtra("GLOW_COLOR"));
                       } catch (Throwable t) {}
                   }
-                  // START_NOT_STICKY verhindert, dass Samsung/Xiaomi den Dienst nach dem Beenden neustartet!
                   return START_NOT_STICKY; 
               }
 
@@ -239,7 +247,7 @@ jobs:
           }
           EOF
 
-          # MainActivity.java (00:00 Uhr Reset & Samsung Stop Fix)
+          # MainActivity.java (Exakter Tages-Reset ab 00:00 Uhr)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
           import android.content.Intent;
@@ -277,7 +285,6 @@ jobs:
                   private String cachedHeartRate = "72";
                   private boolean isHealthConnectAvailable = false;
 
-                  // GANZ WICHTIG: Setzt den Suchzeitraum EXAKT auf heute 00:00:00 Uhr
                   private Instant getStartOfToday() {
                       try {
                           ZonedDateTime startOfDay = LocalDate.now().atStartOfDay(ZoneId.systemDefault());
@@ -305,7 +312,6 @@ jobs:
                               HealthConnectClient client = HealthConnectClient.getOrCreate(MainActivity.this);
                               isHealthConnectAvailable = true;
                               
-                              // Abfrage strikt ab 00:00 Uhr heute!
                               TimeRangeFilter filter = TimeRangeFilter.Companion.between(getStartOfToday(), Instant.now());
                               
                               client.aggregate(new AggregateRequest(Collections.singleton(StepsRecord.COUNT_TOTAL), filter, Collections.emptySet()), 
