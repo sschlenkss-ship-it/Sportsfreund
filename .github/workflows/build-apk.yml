@@ -29,7 +29,6 @@ jobs:
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/java/de/sportfreund/app
           
-          # --- AUTOMATISCHE APP ICON PLATZIERUNG ---
           if [ -f app-icon.png ]; then
             echo "Eigener App-Icon gefunden. Kopiere..."
           else
@@ -100,7 +99,7 @@ jobs:
           }
           EOF
 
-          # OverlayService.java (Der Schwebende Smiley) injizieren
+          # OverlayService.java (Samsung-Sicher & Sauber Stoppbar)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/OverlayService.java
           package de.sportfreund.app;
           import android.app.Service;
@@ -182,7 +181,7 @@ jobs:
                                   case MotionEvent.ACTION_MOVE:
                                       params.x = initialX + (int) (event.getRawX() - initialTouchX);
                                       params.y = initialY + (int) (event.getRawY() - initialTouchY);
-                                      windowManager.updateViewLayout(containerLayout, params);
+                                      try { windowManager.updateViewLayout(containerLayout, params); } catch (Throwable t) {}
                                       return true;
                               }
                               return false;
@@ -194,11 +193,16 @@ jobs:
               @Override public int onStartCommand(Intent intent, int flags, int startId) {
                   if (intent != null) {
                       try {
+                          if ("STOP_FLOATING".equals(intent.getAction())) {
+                              stopSelf();
+                              return START_NOT_STICKY;
+                          }
                           if ("UPDATE_IMAGE".equals(intent.getAction())) downloadAndSetImage(intent.getStringExtra("IMAGE_URL"));
                           else if ("UPDATE_GLOW".equals(intent.getAction())) updateGlowColor(intent.getStringExtra("GLOW_COLOR"));
                       } catch (Throwable t) {}
                   }
-                  return START_STICKY;
+                  // START_NOT_STICKY verhindert, dass Samsung/Xiaomi den Dienst nach dem Beenden neustartet!
+                  return START_NOT_STICKY; 
               }
 
               private void updateGlowColor(String hexColor) {
@@ -227,13 +231,15 @@ jobs:
               @Override public void onDestroy() {
                   super.onDestroy();
                   try {
-                      if (containerLayout != null) windowManager.removeView(containerLayout);
+                      if (containerLayout != null && windowManager != null) {
+                          windowManager.removeView(containerLayout);
+                      }
                   } catch (Throwable t) {}
               }
           }
           EOF
 
-          # MainActivity.java (Absturzsicherer Motor mit Throwable-Catch)
+          # MainActivity.java (00:00 Uhr Reset & Samsung Stop Fix)
           cat << 'EOF' > android/app/src/main/java/de/sportfreund/app/MainActivity.java
           package de.sportfreund.app;
           import android.content.Intent;
@@ -244,9 +250,9 @@ jobs:
           import android.webkit.JavascriptInterface;
           import com.getcapacitor.BridgeActivity;
           import java.time.Instant;
-          import java.time.LocalTime;
+          import java.time.LocalDate;
+          import java.time.ZoneId;
           import java.time.ZonedDateTime;
-          import java.time.temporal.ChronoUnit;
           import java.util.Collections;
           import kotlin.coroutines.Continuation;
           import kotlin.coroutines.CoroutineContext;
@@ -271,18 +277,13 @@ jobs:
                   private String cachedHeartRate = "72";
                   private boolean isHealthConnectAvailable = false;
 
-                  private Instant getStartOfDay(String sleepEnd) {
+                  // GANZ WICHTIG: Setzt den Suchzeitraum EXAKT auf heute 00:00:00 Uhr
+                  private Instant getStartOfToday() {
                       try {
-                          String[] parts = sleepEnd.split(":");
-                          LocalTime wakeTime = LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-                          ZonedDateTime now = ZonedDateTime.now(java.time.ZoneId.systemDefault());
-                          ZonedDateTime wakeToday = now.with(wakeTime);
-                          if (wakeToday.isAfter(now)) {
-                              wakeToday = wakeToday.minusDays(1);
-                          }
-                          return wakeToday.toInstant();
+                          ZonedDateTime startOfDay = LocalDate.now().atStartOfDay(ZoneId.systemDefault());
+                          return startOfDay.toInstant();
                       } catch (Throwable t) { 
-                          return Instant.now().minus(12, ChronoUnit.HOURS); 
+                          return Instant.now(); 
                       }
                   }
 
@@ -303,7 +304,9 @@ jobs:
 
                               HealthConnectClient client = HealthConnectClient.getOrCreate(MainActivity.this);
                               isHealthConnectAvailable = true;
-                              TimeRangeFilter filter = TimeRangeFilter.Companion.between(getStartOfDay(sleepEnd), Instant.now());
+                              
+                              // Abfrage strikt ab 00:00 Uhr heute!
+                              TimeRangeFilter filter = TimeRangeFilter.Companion.between(getStartOfToday(), Instant.now());
                               
                               client.aggregate(new AggregateRequest(Collections.singleton(StepsRecord.COUNT_TOTAL), filter, Collections.emptySet()), 
                               new Continuation<Object>() {
@@ -387,7 +390,10 @@ jobs:
                   @JavascriptInterface public void stopFloatingWidget() {
                       runOnUiThread(() -> {
                           try {
-                              stopService(new Intent(MainActivity.this, OverlayService.class));
+                              Intent stopIntent = new Intent(MainActivity.this, OverlayService.class);
+                              stopIntent.setAction("STOP_FLOATING");
+                              startService(stopIntent);
+                              stopService(stopIntent);
                           } catch (Throwable t) {}
                       });
                   }
